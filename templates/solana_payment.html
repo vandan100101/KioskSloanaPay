@@ -5,56 +5,421 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Solana Pay - Helmet Sanitizer</title>
     <style>
-        /* Keep all your existing CSS styles */
-        /* ... existing CSS ... */
-        
-        .transaction-input {
-            background: rgba(0, 0, 0, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 12px 15px;
-            color: white;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
             width: 100%;
-            margin: 10px 0;
-            transition: all 0.3s ease;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
-        .transaction-input:focus {
-            outline: none;
-            border-color: #14F195;
-            box-shadow: 0 0 15px rgba(20, 241, 149, 0.3);
-        }
-        
-        .transaction-submit {
+
+        body {
             background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
             color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 12px 25px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            margin-top: 10px;
+            position: relative;
+        }
+
+        .particles {
+            position: fixed;
             width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
         }
-        
-        .transaction-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(153, 69, 255, 0.4);
+
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 50%;
+            animation: float 15s infinite ease-in-out;
         }
-        
-        .manual-verification {
-            margin-top: 20px;
-            padding: 15px;
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0) rotate(0deg); }
+            33% { transform: translateY(-60px) translateX(40px) rotate(120deg); }
+            66% { transform: translateY(-40px) translateX(-40px) rotate(240deg); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            animation: slideDown 0.8s ease-out;
             background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 15px 30px;
+            border-radius: 15px;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 5px;
+        }
+
+        .logo {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
             border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(153, 69, 255, 0.5);
+        }
+
+        h1 {
+            font-size: 1.6em;
+            font-weight: 700;
+            margin-bottom: 3px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 0.85em;
+            opacity: 0.85;
+            color: #14F195;
+        }
+
+        .solana-display {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 25px;
+            padding: 30px 25px;
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.85); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .qr-section {
+            margin: 20px 0;
+            min-height: 280px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-code-container {
+            background: white;
+            padding: 20px;
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(153, 69, 255, 0.3);
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-bottom: 15px;
+        }
+
+        .qr-code-container img {
+            display: block;
+            width: 220px;
+            height: 220px;
+        }
+
+        .amount-display {
+            font-size: 2.2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 15px 0;
+            filter: drop-shadow(0 0 20px rgba(153, 69, 255, 0.4));
+        }
+
+        .wallet-address {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75em;
+            word-break: break-all;
+            margin: 15px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .instructions {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
             border: 1px solid rgba(255, 255, 255, 0.15);
         }
+
+        .instructions h3 {
+            font-size: 1em;
+            margin-bottom: 10px;
+            color: #14F195;
+        }
+
+        .instructions ol {
+            text-align: left;
+            padding-left: 20px;
+            font-size: 0.85em;
+            line-height: 1.8;
+        }
+
+        .status-text {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 18px 0;
+            min-height: 32px;
+        }
+
+        .status-text.success {
+            color: #14F195;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.02); }
+        }
+
+        .loader {
+            width: 45px;
+            height: 45px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #14F195;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin: 25px 0 20px;
+        }
+
+        .step {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .step::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            width: 8px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .step:last-child::after {
+            display: none;
+        }
+
+        .step.active {
+            background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+            border-color: #14F195;
+            transform: scale(1.15);
+            box-shadow: 0 0 15px rgba(20, 241, 149, 0.5);
+        }
+
+        .step.completed {
+            background: linear-gradient(135deg, #14F195 0%, #00e676 100%);
+            border-color: #14F195;
+        }
+
+        .step.completed::before {
+            content: '✓';
+            font-size: 0.9em;
+        }
+
+        .controls {
+            margin-top: 25px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            font-size: 1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-simulate {
+            background: linear-gradient(135deg, #14F195 0%, #00e676 100%);
+            color: #1a1a1a;
+            font-weight: 700;
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-back {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .sanitizing-animation {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(153, 69, 255, 0.95) 0%, rgba(20, 241, 149, 0.9) 100%);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .sanitizing-animation.active {
+            display: flex;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .sanitizing-icon {
+            font-size: 7em;
+            animation: sanitize 2s ease-in-out infinite;
+            filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.5));
+        }
+
+        @keyframes sanitize {
+            0%, 100% { transform: rotate(-10deg) scale(1); }
+            50% { transform: rotate(10deg) scale(1.15); }
+        }
+
+        .sanitizing-text {
+            font-size: 1.8em;
+            margin-top: 25px;
+            font-weight: 700;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .sanitizing-progress {
+            width: 280px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            margin-top: 25px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .sanitizing-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #14F195 0%, #00e676 100%);
+            animation: progress 10s linear;
+            box-shadow: 0 0 10px rgba(20, 241, 149, 0.5);
+        }
+
+        @keyframes progress {
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+
+        .back-button {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+            backdrop-filter: blur(10px);
+            border-radius: 50%;
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            z-index: 10;
+            text-decoration: none;
+            color: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        .back-button:active {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%);
+            transform: scale(0.95);
+        }
+
+        @media (max-height: 500px) {
+            .container { padding: 15px; }
+            .header { margin-bottom: 15px; padding: 12px 25px; }
+            h1 { font-size: 1.4em; }
+            .qr-code-container img { width: 180px; height: 180px; }
+            .qr-code-container { padding: 15px; }
+        }
     </style>
-    <!-- Add Solana Web3.js -->
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js"></script>
 </head>
 <body>
     <div class="particles" id="particles"></div>
@@ -83,24 +448,6 @@
                 <div class="step active">1</div>
                 <div class="step">2</div>
                 <div class="step">3</div>
-            </div>
-
-            <!-- Manual Transaction Verification -->
-            <div class="manual-verification">
-                <h3 style="margin-bottom: 10px; color: #9945FF;">🔍 Manual Verification</h3>
-                <p style="font-size: 0.85em; opacity: 0.8; margin-bottom: 10px;">
-                    Already made a payment? Paste your transaction signature:
-                </p>
-                <input type="text" 
-                       id="txSignature" 
-                       class="transaction-input" 
-                       placeholder="Enter transaction signature..."
-                       style="font-size: 0.8em;">
-                <button onclick="submitTransaction()" 
-                        class="transaction-submit" 
-                        id="verifyBtn">
-                    ✅ Verify Transaction
-                </button>
             </div>
 
             <div class="instructions">
@@ -133,20 +480,23 @@
     <script>
         let paymentReference = null;
         let pollInterval = null;
-        let solanaConnection = null;
 
-        // Initialize Solana connection
-        function initSolana() {
-            try {
-                // For devnet
-                const network = 'devnet';
-                const endpoint = 'https://api.devnet.solana.com';
-                solanaConnection = new solanaWeb3.Connection(endpoint, 'confirmed');
-                console.log('✅ Solana connection initialized');
-            } catch (error) {
-                console.error('❌ Failed to initialize Solana:', error);
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 12; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                const size = Math.random() * 70 + 40;
+                particle.style.width = size + 'px';
+                particle.style.height = size + 'px';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 5 + 's';
+                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                container.appendChild(particle);
             }
         }
+        createParticles();
 
         async function initializeSolanaPayment() {
             try {
@@ -158,7 +508,6 @@
                 }
 
                 paymentReference = data.reference;
-                window.currentSolanaAmount = data.amount;
 
                 document.getElementById('paymentArea').innerHTML = `
                     <div class="qr-section">
@@ -168,11 +517,6 @@
                         <div class="amount-display">${data.amount}</div>
                         <div class="wallet-address">To: ${data.recipient.substring(0, 20)}...${data.recipient.substring(data.recipient.length - 10)}</div>
                         <p class="status-text">Waiting for payment...</p>
-                        <div style="margin-top: 15px;">
-                            <a href="${data.solana_url}" target="_blank" style="color: #14F195; text-decoration: underline; font-size: 0.9em;">
-                                Open in wallet app
-                            </a>
-                        </div>
                     </div>
                 `;
 
@@ -185,9 +529,6 @@
                         <div style="font-size: 4em;">⚠️</div>
                         <h3 style="margin-top: 15px;">Error</h3>
                         <p style="margin-top: 10px; opacity: 0.8;">Failed to generate payment QR</p>
-                        <button onclick="initializeSolanaPayment()" class="btn btn-simulate" style="margin-top: 15px;">
-                            🔄 Try Again
-                        </button>
                     </div>
                 `;
             }
@@ -212,46 +553,6 @@
             setTimeout(() => {
                 clearInterval(pollInterval);
             }, 300000);
-        }
-
-        async function submitTransaction() {
-            const signature = document.getElementById('txSignature').value.trim();
-            const verifyBtn = document.getElementById('verifyBtn');
-            
-            if (!signature) {
-                alert('Please enter a transaction signature');
-                return;
-            }
-
-            verifyBtn.disabled = true;
-            verifyBtn.textContent = 'Verifying...';
-
-            try {
-                const response = await fetch('/confirm_solana_payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        reference: paymentReference,
-                        signature: signature
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    window.solanaSessionId = data.session_id;
-                    onPaymentSuccess();
-                } else {
-                    alert('Transaction verification failed: ' + (data.error || 'Unknown error'));
-                    verifyBtn.disabled = false;
-                    verifyBtn.textContent = '✅ Verify Transaction';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Network error. Please try again.');
-                verifyBtn.disabled = false;
-                verifyBtn.textContent = '✅ Verify Transaction';
-            }
         }
 
         async function simulatePayment() {
@@ -329,10 +630,7 @@
         }
 
         // Initialize on page load
-        window.addEventListener('DOMContentLoaded', () => {
-            initSolana();
-            initializeSolanaPayment();
-        });
+        window.addEventListener('DOMContentLoaded', initializeSolanaPayment);
 
         // Auto-reset
         let inactivityTimer;
