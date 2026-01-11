@@ -1,5 +1,8 @@
-Flask==3.0.0
+Flask==2.3.3
 requests==2.31.0
 qrcode[pil]==7.4.2
 RPi.GPIO==0.7.1
+solana==0.29.0
+solders==0.18.1
+aiohttp==3.9.1
 python-dotenv==1.0.0

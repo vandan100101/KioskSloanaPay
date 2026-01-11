@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Scan to Pay</title>
+    <title>Scan to Pay - Helmet Sanitizer</title>
     <style>
         * {
             margin: 0;
@@ -13,19 +13,20 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f5f5f5;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
         .header {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
             padding: 15px 20px;
             display: flex;
             align-items: center;
             gap: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
         }
 
         .back-btn {
@@ -40,6 +41,13 @@
             cursor: pointer;
             text-decoration: none;
             color: #333;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: #4CAF50;
+            color: white;
+            transform: translateX(-3px);
         }
 
         .header-title {
@@ -67,41 +75,76 @@
         }
 
         .qr-container {
-            background: white;
-            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 25px;
             padding: 30px;
             text-align: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            max-width: 420px;
             width: 100%;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .qr-box {
             background: white;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 0 0 3px #4CAF50;
+            padding: 25px;
+            border-radius: 20px;
             margin: 20px auto;
             display: inline-block;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .qr-box::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(76, 175, 80, 0.1), transparent);
+            animation: shine 3s infinite;
+        }
+
+        @keyframes shine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
         }
 
         .qr-box img {
-            width: 240px;
-            height: 240px;
+            width: 250px;
+            height: 250px;
             display: block;
+            border-radius: 10px;
+            position: relative;
+            z-index: 1;
         }
 
         .loader {
-            width: 240px;
-            height: 240px;
+            width: 250px;
+            height: 250px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .spinner {
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             border: 4px solid #f3f3f3;
             border-top: 4px solid #4CAF50;
             border-radius: 50%;
@@ -113,42 +156,49 @@
         }
 
         .amount {
-            font-size: 2.5em;
-            font-weight: 700;
+            font-size: 3em;
+            font-weight: 800;
             color: #4CAF50;
             margin: 15px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
         }
 
         .status {
             color: #666;
-            font-size: 0.95em;
+            font-size: 1.1em;
             margin: 15px 0;
+            min-height: 24px;
+            font-weight: 500;
         }
 
         .steps {
             display: flex;
             justify-content: center;
-            gap: 10px;
-            margin: 20px 0;
+            gap: 15px;
+            margin: 25px 0;
         }
 
         .step {
-            width: 35px;
-            height: 35px;
+            width: 40px;
+            height: 40px;
             background: #f5f5f5;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
+            font-weight: 700;
             color: #999;
             border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+            position: relative;
         }
 
         .step.active {
             background: #4CAF50;
             color: white;
             border-color: #4CAF50;
+            transform: scale(1.1);
+            box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
         }
 
         .step.done {
@@ -159,56 +209,216 @@
 
         .step.done::before {
             content: '✓';
+            font-weight: bold;
+        }
+
+        .step::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -17px;
+            width: 15px;
+            height: 2px;
+            background: #e0e0e0;
+            transform: translateY(-50%);
+        }
+
+        .step:last-child::after {
+            display: none;
         }
 
         .providers {
             display: flex;
             justify-content: center;
-            gap: 8px;
-            margin-top: 15px;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
         }
 
         .provider {
-            background: #f5f5f5;
-            padding: 5px 12px;
-            border-radius: 8px;
-            font-size: 0.8em;
-            color: #666;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 0.85em;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 3px 8px rgba(102, 126, 234, 0.3);
         }
 
         .test-btn {
-            margin-top: 20px;
-            padding: 12px 25px;
-            background: #4CAF50;
+            margin-top: 25px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
             color: white;
             border: none;
-            border-radius: 10px;
-            font-weight: 600;
+            border-radius: 12px;
+            font-weight: 700;
             cursor: pointer;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(76, 175, 80, 0.4);
         }
 
         .test-btn:active {
-            transform: scale(0.98);
+            transform: translateY(0);
         }
 
         .success-icon {
             font-size: 5em;
             margin: 20px 0;
+            animation: bounce 1s ease infinite;
         }
-        
-        /* Debug button */
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
         .debug-button {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            padding: 10px 15px;
-            background: #ff9800;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 25px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 14px;
+            font-weight: 600;
             z-index: 1000;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .debug-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4);
+        }
+
+        .countdown {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #ff9800;
+            margin: 10px 0;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .reference {
+            font-family: 'Courier New', monospace;
+            background: #f5f5f5;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            color: #666;
+            margin: 10px 0;
+            display: inline-block;
+            border: 1px solid #e0e0e0;
+        }
+
+        /* Loading dots animation */
+        .loading-dots::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        /* Sanitization animation */
+        .sanitizing-container {
+            text-align: center;
+            margin-top: 20px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .sanitizing-icon {
+            font-size: 4em;
+            animation: spin 2s linear infinite, pulse 1.5s infinite;
+        }
+
+        .sanitizing-text {
+            margin-top: 15px;
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #4CAF50;
+        }
+
+        .sanitizing-progress {
+            width: 100%;
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+
+        .sanitizing-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            width: 0%;
+            border-radius: 5px;
+            transition: width 0.1s linear;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .timer {
+            font-size: 2em;
+            font-weight: 700;
+            color: #4CAF50;
+            margin: 15px 0;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 180px;
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+
+        .action-btn.secondary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
     </style>
 </head>
@@ -217,13 +427,13 @@
         <a href="/" class="back-btn">←</a>
         <div class="header-title">
             <h1>Scan to Pay</h1>
-            <p>Use any e-wallet app</p>
+            <p>Use any e-wallet app to pay ₱1.00</p>
         </div>
     </div>
 
     <div class="main">
         <div class="qr-container">
-            <!-- Updated ID to match JavaScript -->
+            <!-- QR Section -->
             <div id="qrSection">
                 <div class="qr-box">
                     <div class="loader">
@@ -233,16 +443,21 @@
                 <p class="status" id="statusMessage">Generating QR code...</p>
             </div>
 
+            <!-- Progress Steps -->
             <div class="steps">
-                <div class="step active">1</div>
-                <div class="step">2</div>
-                <div class="step">3</div>
+                <div class="step active" id="step1">1</div>
+                <div class="step" id="step2">2</div>
+                <div class="step" id="step3">3</div>
             </div>
             
-            <!-- Add sanitization animation container -->
-            <div id="sanitizingAnimation" style="display: none; text-align: center; margin-top: 20px;">
-                <div class="sanitizing-icon" style="font-size: 3em;">🧼</div>
-                <div class="sanitizing-text" style="margin-top: 10px; font-weight: 600;">Sanitizing in progress...</div>
+            <!-- Sanitization Animation -->
+            <div id="sanitizingAnimation" class="sanitizing-container" style="display: none;">
+                <div class="sanitizing-icon">🧼</div>
+                <div class="sanitizing-text">Sanitizing in progress...</div>
+                <div class="sanitizing-progress">
+                    <div class="sanitizing-progress-bar" id="progressBar"></div>
+                </div>
+                <div class="timer" id="timer">10s</div>
             </div>
         </div>
     </div>
@@ -254,6 +469,8 @@
         // Global variables
         let paymentReference = '';
         let pollingInterval = null;
+        let sanitizationTimer = null;
+        let remainingTime = 10;
 
         // Initialize payment process
         async function initPayment() {
@@ -286,7 +503,7 @@
                 }
 
                 // Store reference for later use
-                paymentReference = data.reference || data.payment_reference;
+                paymentReference = data.reference;
                 console.log('✅ QR code generated. Reference:', paymentReference);
                 console.log('💰 Amount:', data.amount);
 
@@ -296,19 +513,25 @@
                     <div class="qr-box">
                         <img src="data:image/png;base64,${data.qr_image}" alt="QR Code" id="qrImage">
                     </div>
-                    <div class="amount">${data.amount || '₱0.00'}</div>
+                    <div class="amount">${data.amount || '₱1.00'}</div>
                     <p class="status" id="statusMessage">📱 Scan QR to pay...</p>
-                    ${paymentReference ? `<p class="status" style="font-size: 0.8em; margin-top: 5px; color: #666;">
-                        Ref: ${paymentReference.substring(0, 20)}...
-                    </p>` : ''}
+                    ${paymentReference ? `
+                        <div class="reference">
+                            Ref: ${paymentReference}
+                        </div>
+                    ` : ''}
                     <div class="providers">
                         <span class="provider">GCash</span>
                         <span class="provider">Maya</span>
                         <span class="provider">PayMaya</span>
+                        <span class="provider">GrabPay</span>
                     </div>
+                    <button class="test-btn" onclick="testManualPayment()">
+                        Test Payment (Dev Mode)
+                    </button>
                 `;
                 
-                showStatus('💳 Scan QR to pay...', 'waiting');
+                showStatus('💳 Scan QR code with your e-wallet app');
                 
                 // Start polling for payment status
                 startPaymentPolling();
@@ -318,14 +541,17 @@
                 const qrSection = document.getElementById('qrSection');
                 qrSection.innerHTML = `
                     <div style="text-align: center;">
-                        <div style="font-size: 3.5em; color: #f44336;">⚠️</div>
-                        <h3 style="margin-top: 15px;">Error</h3>
-                        <p style="margin-top: 10px; font-size: 0.85em; opacity: 0.8;">${error.message}</p>
-                        <button onclick="window.location.href='/'" 
-                                style="margin-top: 20px; padding: 10px 20px; background: #f44336; 
-                                       color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
-                            Go Back
-                        </button>
+                        <div style="font-size: 4em; color: #f44336;">⚠️</div>
+                        <h3 style="margin-top: 15px; color: #f44336;">Error</h3>
+                        <p style="margin-top: 10px; font-size: 1em; opacity: 0.8;">${error.message}</p>
+                        <div class="action-buttons">
+                            <button class="action-btn primary" onclick="window.location.reload()">
+                                Try Again
+                            </button>
+                            <button class="action-btn secondary" onclick="window.location.href='/'">
+                                Go Home
+                            </button>
+                        </div>
                     </div>
                 `;
                 showStatus('❌ Payment setup failed', 'error');
@@ -338,7 +564,18 @@
             const statusMsg = document.getElementById('statusMessage');
             if (statusMsg) {
                 statusMsg.textContent = message;
-                // You can add different styling based on type if needed
+                statusMsg.className = 'status';
+                
+                if (type === 'waiting') {
+                    statusMsg.classList.add('loading-dots');
+                    statusMsg.style.color = '#666';
+                } else if (type === 'success') {
+                    statusMsg.style.color = '#4CAF50';
+                    statusMsg.style.fontWeight = '600';
+                } else if (type === 'error') {
+                    statusMsg.style.color = '#f44336';
+                }
+                
                 console.log(`📢 Status: ${message} (${type})`);
             }
         }
@@ -356,22 +593,27 @@
             stopPaymentPolling();
             
             // Update progress steps
-            const steps = document.querySelectorAll('.step');
-            steps[0].classList.add('done');
-            steps[1].classList.add('active');
+            document.getElementById('step1').classList.add('done');
+            document.getElementById('step2').classList.add('active');
             
             let pollCount = 0;
-            const maxPolls = 100; // 5 minutes max
+            const maxPolls = 200; // 10 minutes max (200 * 3 seconds)
             
             pollingInterval = setInterval(async () => {
                 pollCount++;
                 console.log(`📊 Poll attempt ${pollCount} for reference: ${paymentReference}`);
                 
                 try {
-                    const response = await fetch(`/check_payment/${paymentReference}`);
+                    // Use test parameter for development
+                    const useTestMode = localStorage.getItem('testMode') === 'true';
+                    const url = `/check_payment/${paymentReference}${useTestMode ? '?test=true' : ''}`;
+                    
+                    const response = await fetch(url);
                     
                     if (!response.ok) {
                         console.error(`❌ API Error ${response.status} for poll ${pollCount}`);
+                        showStatus('⚠️ Connection issue, retrying...', 'waiting');
+                        
                         if (pollCount >= maxPolls) {
                             handlePollingTimeout();
                         }
@@ -383,9 +625,8 @@
                     
                     switch(data.status) {
                         case 'PAID':
-                        case 'SUCCESS':
                             console.log('✅ Payment confirmed!');
-                            handlePaymentSuccess(data.session_id || data.reference);
+                            handlePaymentSuccess(data.session_id);
                             break;
                             
                         case 'FAILED':
@@ -397,19 +638,18 @@
                             
                         case 'NOT_FOUND':
                             console.log('❌ Payment not found');
-                            handlePaymentNotFound();
+                            showStatus('❌ Payment reference not found', 'error');
                             break;
                             
                         default:
                             // Still pending
-                            console.log('⏳ Payment still pending');
-                            showStatus('⏳ Waiting for payment... Scan the QR code');
+                            const minutes = Math.floor(pollCount * 3 / 60);
+                            const seconds = (pollCount * 3) % 60;
+                            showStatus(`⏳ Waiting for payment... (${minutes}m ${seconds}s)`, 'waiting');
                             
-                            // Show time elapsed every 10 polls
+                            // Update status every 10 polls
                             if (pollCount % 10 === 0) {
-                                const secondsElapsed = pollCount * 3;
-                                console.log(`⏰ Still waiting... (${secondsElapsed} seconds elapsed)`);
-                                showStatus(`⏳ Waiting... ${Math.floor(secondsElapsed/60)}m ${secondsElapsed%60}s elapsed`);
+                                console.log(`⏰ Still waiting... (${pollCount * 3} seconds elapsed)`);
                             }
                     }
                     
@@ -420,7 +660,7 @@
                     
                 } catch (error) {
                     console.error('❌ Polling error:', error);
-                    showStatus('⚠️ Connection issue, retrying...');
+                    showStatus('⚠️ Connection issue, retrying...', 'waiting');
                     
                     if (pollCount >= maxPolls) {
                         handlePollingTimeout();
@@ -428,12 +668,12 @@
                 }
             }, 3000); // Check every 3 seconds
             
-            // Safety timeout after 5 minutes
+            // Safety timeout after 10 minutes
             setTimeout(() => {
                 if (pollingInterval) {
                     handlePollingTimeout();
                 }
-            }, 300000);
+            }, 600000);
         }
 
         // Stop polling
@@ -450,25 +690,38 @@
             stopPaymentPolling();
             
             // Update progress steps
-            const steps = document.querySelectorAll('.step');
-            steps[1].classList.add('done');
-            steps[2].classList.add('active');
+            document.getElementById('step2').classList.add('done');
+            document.getElementById('step3').classList.add('active');
             
             // Show success animation
             const qrSection = document.getElementById('qrSection');
             qrSection.innerHTML = `
                 <div class="success-icon">✅</div>
-                <h2 style="color: #4CAF50; font-size: 1.3em; font-weight: 700;">Payment Confirmed!</h2>
-                <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;">Transaction successful</p>
-                ${sessionId ? `<p style="margin-top: 5px; font-size: 0.8em; color: #666;">
+                <h2 style="color: #4CAF50; font-size: 1.5em; font-weight: 800; margin-top: 10px;">Payment Confirmed!</h2>
+                <p style="margin-top: 10px; font-size: 1em; opacity: 0.8;">Transaction successful</p>
+                <div class="reference" style="margin: 15px 0;">
+                    Ref: ${paymentReference}
+                </div>
+                ${sessionId ? `<div class="reference" style="margin-bottom: 15px;">
                     Session: ${sessionId}
-                </p>` : ''}
-                <button class="test-btn" onclick="startSanitization('${sessionId || ''}')">
-                    Start Sanitization
-                </button>
+                </div>` : ''}
+                <div class="countdown" id="countdown">Starting sanitization in 3s...</div>
             `;
             
-            showStatus('✅ Payment successful!');
+            showStatus('✅ Payment successful!', 'success');
+            
+            // Countdown before starting sanitization
+            let countdown = 3;
+            const countdownElement = document.getElementById('countdown');
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    countdownElement.textContent = `Starting sanitization in ${countdown}s...`;
+                } else {
+                    clearInterval(countdownInterval);
+                    startSanitization(sessionId);
+                }
+            }, 1000);
         }
 
         // Handle payment failure
@@ -478,60 +731,83 @@
             const errorMessages = {
                 'FAILED': 'Payment failed',
                 'CANCELLED': 'Payment cancelled',
-                'EXPIRED': 'Payment expired'
+                'EXPIRED': 'QR code expired'
             };
             
             const message = errorMessages[status] || 'Payment failed';
-            showStatus(`❌ ${message}`);
             
             const qrSection = document.getElementById('qrSection');
             qrSection.innerHTML += `
-                <div style="margin-top: 20px; padding: 15px; background: rgba(244, 67, 54, 0.1); border-radius: 10px;">
-                    <p style="font-size: 0.9em; color: #f44336;">${message}. Please try again.</p>
-                    <button onclick="window.location.reload()" 
-                            style="margin-top: 10px; padding: 8px 15px; background: #4CAF50; 
-                                   color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Try Again
-                    </button>
+                <div style="margin-top: 20px; padding: 20px; background: linear-gradient(135deg, rgba(244, 67, 54, 0.1) 0%, rgba(229, 57, 53, 0.1) 100%); border-radius: 15px;">
+                    <h3 style="color: #f44336; margin-bottom: 10px;">${message}</h3>
+                    <p style="font-size: 0.95em; color: #f44336; opacity: 0.9;">Please try again or use another payment method.</p>
+                    <div class="action-buttons" style="margin-top: 15px;">
+                        <button class="action-btn primary" onclick="window.location.reload()">
+                            Try Again
+                        </button>
+                        <button class="action-btn secondary" onclick="window.location.href='/'">
+                            Go Home
+                        </button>
+                    </div>
                 </div>
             `;
-        }
-
-        // Handle payment not found
-        function handlePaymentNotFound() {
-            stopPaymentPolling();
-            showStatus('❌ Payment not found');
             
-            const qrSection = document.getElementById('qrSection');
-            qrSection.innerHTML += `
-                <div style="margin-top: 20px; padding: 15px; background: rgba(255, 152, 0, 0.1); border-radius: 10px;">
-                    <p style="font-size: 0.9em; color: #ff9800;">Payment reference not found. Please start over.</p>
-                    <button onclick="window.location.href='/'" 
-                            style="margin-top: 10px; padding: 8px 15px; background: #4CAF50; 
-                                   color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Go Home
-                    </button>
-                </div>
-            `;
+            showStatus(`❌ ${message}`, 'error');
         }
 
         // Handle polling timeout
         function handlePollingTimeout() {
             stopPaymentPolling();
-            console.log('⏰ Polling timeout after 5 minutes');
-            showStatus('⏱️ Payment timeout');
+            console.log('⏰ Polling timeout after 10 minutes');
             
             const qrSection = document.getElementById('qrSection');
             qrSection.innerHTML += `
-                <div style="margin-top: 20px; padding: 15px; background: rgba(255, 152, 0, 0.1); border-radius: 10px;">
-                    <p style="font-size: 0.9em; color: #ff9800;">Payment session expired. Please try again.</p>
-                    <button onclick="window.location.reload()" 
-                            style="margin-top: 10px; padding: 8px 15px; background: #4CAF50; 
-                                   color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Try Again
-                    </button>
+                <div style="margin-top: 20px; padding: 20px; background: linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(245, 124, 0, 0.1) 100%); border-radius: 15px;">
+                    <h3 style="color: #ff9800; margin-bottom: 10px;">Session Expired</h3>
+                    <p style="font-size: 0.95em; color: #ff9800; opacity: 0.9;">This QR code has expired. Please generate a new one.</p>
+                    <div class="action-buttons" style="margin-top: 15px;">
+                        <button class="action-btn primary" onclick="window.location.reload()">
+                            Generate New QR
+                        </button>
+                        <button class="action-btn secondary" onclick="window.location.href='/'">
+                            Go Home
+                        </button>
+                    </div>
                 </div>
             `;
+            
+            showStatus('⏱️ Payment session expired', 'error');
+        }
+
+        // Test manual payment (for development)
+        async function testManualPayment() {
+            if (!paymentReference) {
+                alert('Please generate a QR code first');
+                return;
+            }
+            
+            console.log('🧪 Testing manual payment for:', paymentReference);
+            showStatus('🧪 Processing test payment...', 'waiting');
+            
+            try {
+                const response = await fetch(`/test_payment/${paymentReference}`);
+                if (!response.ok) {
+                    throw new Error(`Test failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('🧪 Test result:', data);
+                
+                if (data.status === 'PAID' || data.status === 'SUCCESS') {
+                    showStatus('✅ Manual test successful!', 'success');
+                    handlePaymentSuccess(data.session_id || data.reference);
+                } else {
+                    showStatus('❌ Manual test failed', 'error');
+                }
+            } catch (error) {
+                console.error('❌ Manual test error:', error);
+                showStatus('❌ Test failed: ' + error.message, 'error');
+            }
         }
 
         // Start sanitization process
@@ -543,11 +819,42 @@
             document.getElementById('sanitizingAnimation').style.display = 'block';
             
             // Update progress steps
-            const steps = document.querySelectorAll('.step');
-            steps[2].classList.add('done');
+            document.getElementById('step3').classList.add('done');
             
-            // Complete after 10 seconds
-            setTimeout(() => completeSanitization(sessionId), 10000);
+            // Start sanitization timer
+            remainingTime = 10;
+            updateTimer();
+            
+            // Start progress bar animation
+            let progress = 0;
+            const progressBar = document.getElementById('progressBar');
+            const progressInterval = setInterval(() => {
+                progress += 1;
+                progressBar.style.width = progress + '%';
+                
+                if (progress >= 100) {
+                    clearInterval(progressInterval);
+                }
+            }, 100); // 10 seconds total
+            
+            // Start countdown timer
+            sanitizationTimer = setInterval(() => {
+                remainingTime--;
+                updateTimer();
+                
+                if (remainingTime <= 0) {
+                    clearInterval(sanitizationTimer);
+                    completeSanitization(sessionId);
+                }
+            }, 1000);
+        }
+
+        // Update timer display
+        function updateTimer() {
+            const timerElement = document.getElementById('timer');
+            if (timerElement) {
+                timerElement.textContent = `${remainingTime}s`;
+            }
         }
 
         // Complete sanitization
@@ -557,24 +864,20 @@
             const sanitizingAnimation = document.getElementById('sanitizingAnimation');
             
             sanitizingAnimation.innerHTML = `
-                <div style="text-align: center;">
+                <div style="text-align: center; animation: bounce 1s ease infinite;">
                     <div style="font-size: 5em; color: #4CAF50;">✨</div>
-                    <h2 style="color: #4CAF50; margin-top: 15px;">Complete!</h2>
-                    <p style="margin-top: 10px; font-size: 1.1em; font-weight: 600;">Helmet is clean & safe</p>
-                    <p style="margin-top: 10px; font-size: 0.95em; opacity: 0.8;">Thank you for using our service</p>
-                    ${sessionId ? `<p style="margin-top: 5px; font-size: 0.9em; color: #666;">
+                    <h2 style="color: #4CAF50; font-size: 1.8em; font-weight: 800; margin-top: 15px;">Complete!</h2>
+                    <p style="margin-top: 10px; font-size: 1.2em; font-weight: 600; color: #4CAF50;">Helmet is clean & safe</p>
+                    <p style="margin-top: 10px; font-size: 1em; opacity: 0.8;">Thank you for using our service</p>
+                    ${sessionId ? `<div class="reference" style="margin: 15px 0;">
                         Session: ${sessionId}
-                    </p>` : ''}
-                    <div style="margin-top: 25px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                        <button onclick="goToRating('${sessionId || ''}')" 
-                                style="padding: 12px 25px; background: #4CAF50; 
-                                       color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; width: 200px;">
-                            Rate Service
+                    </div>` : ''}
+                    <div class="action-buttons">
+                        <button class="action-btn primary" onclick="goToRating('${sessionId || ''}')">
+                            ⭐ Rate Service
                         </button>
-                        <button onclick="window.location.href='/'" 
-                                style="padding: 12px 25px; background: #2196F3; 
-                                       color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; width: 200px;">
-                            Done
+                        <button class="action-btn secondary" onclick="window.location.href='/'">
+                            🏠 Done
                         </button>
                     </div>
                 </div>
@@ -599,10 +902,13 @@
             }
             
             console.log('🧪 Testing manual success for:', paymentReference);
-            showStatus('🧪 Testing manual payment...');
+            showStatus('🧪 Testing manual payment...', 'waiting');
             
             try {
-                const response = await fetch(`/test_payment/${paymentReference}`);
+                const response = await fetch(`/mark_paid/${paymentReference}`, {
+                    method: 'POST'
+                });
+                
                 if (!response.ok) {
                     throw new Error(`Test failed: ${response.status}`);
                 }
@@ -610,27 +916,45 @@
                 const data = await response.json();
                 console.log('🧪 Test result:', data);
                 
-                if (data.status === 'PAID' || data.status === 'SUCCESS') {
-                    showStatus('✅ Manual test successful!');
+                if (data.status === 'PAID' || data.success) {
+                    showStatus('✅ Manual test successful!', 'success');
                     handlePaymentSuccess(data.session_id || data.reference);
                 } else {
-                    showStatus('❌ Manual test failed');
+                    showStatus('❌ Manual test failed', 'error');
                 }
             } catch (error) {
                 console.error('❌ Manual test error:', error);
-                showStatus('❌ Test failed: ' + error.message);
+                showStatus('❌ Test failed: ' + error.message, 'error');
             }
+        }
+
+        // Toggle test mode
+        function toggleTestMode() {
+            const currentMode = localStorage.getItem('testMode') === 'true';
+            const newMode = !currentMode;
+            localStorage.setItem('testMode', newMode);
+            alert(`Test mode ${newMode ? 'enabled' : 'disabled'}`);
         }
 
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', () => {
             console.log('🚀 QR Payment Page Loaded');
             initPayment();
+            
+            // Check for test mode
+            if (localStorage.getItem('testMode') === 'true') {
+                console.log('🧪 Test mode enabled');
+                document.querySelector('.debug-button').textContent = 'Test Mode: ON';
+                document.querySelector('.debug-button').style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
+            }
         });
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
             stopPaymentPolling();
+            if (sanitizationTimer) {
+                clearInterval(sanitizationTimer);
+            }
             console.log('👋 Page unloading, cleanup complete');
         });
     </script>

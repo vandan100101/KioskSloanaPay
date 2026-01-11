@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayMongo Webhook Debugger</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Monaco', 'Courier New', monospace; background: #1e1e1e; color: #d4d4d4; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #4CAF50; margin-bottom: 20px; text-align: center; }
+        .panel { background: #252526; border-radius: 8px; padding: 20px; margin-bottom: 20px; border: 1px solid #3e3e42; }
+        .panel h2 { color: #4EC9B0; margin-bottom: 15px; font-size: 1.2em; }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        .info-item { background: #1e1e1e; padding: 12px; border-radius: 6px; border-left: 3px solid #007acc; }
+        .info-label { color: #9cdcfe; font-size: 0.85em; margin-bottom: 5px; }
+        .info-value { color: #ce9178; font-size: 1.1em; word-break: break-all; }
+        .status { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: bold; }
+        .status.paid { background: #4CAF50; color: white; }
+        .status.pending { background: #ff9800; color: white; }
+        .status.error { background: #f44336; color: white; }
+        .button { background: #007acc; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 1em; margin-right: 10px; transition: all 0.3s ease; }
+        .button:hover { background: #005a9e; transform: translateY(-2px); }
+        .button.success { background: #4CAF50; }
+        .button.success:hover { background: #45a049; }
+        .log { background: #1e1e1e; padding: 15px; border-radius: 6px; max-height: 400px; overflow-y: auto; font-size: 0.9em; line-height: 1.6; }
+        .log-entry { margin-bottom: 8px; padding: 8px; border-radius: 4px; background: #2d2d30; }
+        .log-entry.success { border-left: 3px solid #4CAF50; }
+        .log-entry.error { border-left: 3px solid #f44336; }
+        .log-entry.info { border-left: 3px solid #2196F3; }
+        .timestamp { color: #858585; font-size: 0.85em; margin-right: 10px; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+        .payment-list { list-style: none; }
+        .payment-item { background: #1e1e1e; padding: 12px; margin-bottom: 10px; border-radius: 6px; border-left: 3px solid #007acc; display: flex; justify-content: space-between; align-items: center; }
+        .payment-item.paid { border-left-color: #4CAF50; }
+        input[type="text"] { flex: 1; padding: 10px; background: #1e1e1e; border: 1px solid #3e3e42; color: #d4d4d4; border-radius: 6px; font-family: inherit; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 PayMongo Webhook Debugger</h1>
+
+        <div class="panel">
+            <h2>📊 System Status</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Server Status</div>
+                    <div class="info-value" id="serverStatus">Checking...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Webhook Endpoint</div>
+                    <div class="info-value" id="webhookUrl">Loading...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Total Payments</div>
+                    <div class="info-value" id="totalPayments">0</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Paid Payments</div>
+                    <div class="info-value" id="paidPayments">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>💳 Recent Payments</h2>
+            <div class="controls">
+                <button class="button" onclick="loadPayments()">🔄 Refresh</button>
+            </div>
+            <ul class="payment-list" id="paymentList">
+                <li>Loading payments...</li>
+            </ul>
+        </div>
+
+        <div class="panel">
+            <h2>🔧 Manual Payment Trigger</h2>
+            <div class="controls">
+                <input type="text" id="testReference" placeholder="Enter payment reference (e.g., helmet-1768125905-e11117)">
+                <button class="button success" onclick="markAsPaid()">✅ Mark as Paid</button>
+                <button class="button" onclick="checkPayment()">🔍 Check Status</button>
+            </div>
+            <div id="testResult" style="margin-top: 15px;"></div>
+        </div>
+
+        <div class="panel">
+            <h2>📋 Activity Log</h2>
+            <div class="controls">
+                <button class="button" onclick="clearLog()">🗑️ Clear Log</button>
+                <button class="button" onclick="exportLog()">💾 Export</button>
+            </div>
+            <div class="log" id="activityLog">
+                <div class="log-entry info">
+                    <span class="timestamp">[System]</span>
+                    <span>Debugger initialized</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let logEntries = [];
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = { timestamp, message, type };
+            logEntries.push(entry);
+            const logDiv = document.getElementById('activityLog');
+            const entryDiv = document.createElement('div');
+            entryDiv.className = `log-entry ${type}`;
+            entryDiv.innerHTML = `<span class="timestamp">[${timestamp}]</span><span>${message}</span>`;
+            logDiv.appendChild(entryDiv);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                await response.json();
+                document.getElementById('serverStatus').innerHTML = '<span class="status paid">Online</span>';
+                addLog('✅ Server health check passed', 'success');
+            } catch (error) {
+                document.getElementById('serverStatus').innerHTML = '<span class="status error">Offline</span>';
+                addLog('❌ Server health check failed: ' + error.message, 'error');
+            }
+        }
+
+        async function loadWebhookInfo() {
+            try {
+                const response = await fetch('/webhook_info');
+                const data = await response.json();
+                document.getElementById('webhookUrl').textContent = data.webhook_url;
+            } catch (error) {
+                addLog('❌ Failed to load webhook info: ' + error.message, 'error');
+            }
+        }
+
+        async function loadPayments() {
+            addLog('🔄 Loading payments...', 'info');
+            try {
+                const response = await fetch('/list_payments');
+                if (!response.ok) throw new Error('Failed to load payments');
+                const payments = await response.json();
+                const paymentList = document.getElementById('paymentList');
+                paymentList.innerHTML = '';
+                
+                if (payments.length === 0) {
+                    paymentList.innerHTML = '<li style="color: #858585;">No payments found</li>';
+                } else {
+                    document.getElementById('totalPayments').textContent = payments.length;
+                    document.getElementById('paidPayments').textContent = payments.filter(p => p.status === 'PAID').length;
+                    
+                    payments.slice(0, 10).forEach(payment => {
+                        const li = document.createElement('li');
+                        li.className = `payment-item ${payment.status === 'PAID' ? 'paid' : ''}`;
+                        li.innerHTML = `
+                            <div>
+                                <div style="color: #9cdcfe; font-size: 0.9em; cursor: pointer;" onclick="document.getElementById('testReference').value='${payment.reference}'">${payment.reference}</div>
+                                <div style="color: #858585; font-size: 0.85em;">${payment.payment_method} • ₱${payment.amount} • ${new Date(payment.created_at).toLocaleString()}</div>
+                            </div>
+                            <span class="status ${payment.status === 'PAID' ? 'paid' : 'pending'}">${payment.status}</span>
+                        `;
+                        paymentList.appendChild(li);
+                    });
+                }
+                addLog(`✅ Loaded ${payments.length} payments`, 'success');
+            } catch (error) {
+                addLog('❌ Failed to load payments: ' + error.message, 'error');
+            }
+        }
+
+        async function markAsPaid() {
+            const reference = document.getElementById('testReference').value.trim();
+            if (!reference) {
+                addLog('❌ Please enter a payment reference', 'error');
+                return;
+            }
+            addLog(`🔄 Marking ${reference} as paid...`, 'info');
+            try {
+                const response = await fetch(`/mark_paid/${reference}`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    addLog(`✅ Payment ${reference} marked as PAID`, 'success');
+                    document.getElementById('testResult').innerHTML = `
+                        <div class="log-entry success">
+                            <strong>Success!</strong><br>
+                            Reference: ${reference}<br>
+                            Session ID: ${data.session_id}<br>
+                            Status: <span class="status paid">PAID</span>
+                        </div>
+                    `;
+                    loadPayments();
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            } catch (error) {
+                addLog(`❌ Failed: ${error.message}`, 'error');
+                document.getElementById('testResult').innerHTML = `<div class="log-entry error"><strong>Error!</strong><br>${error.message}</div>`;
+            }
+        }
+
+        async function checkPayment() {
+            const reference = document.getElementById('testReference').value.trim();
+            if (!reference) {
+                addLog('❌ Please enter a payment reference', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`/check_payment/${reference}`);
+                const data = await response.json();
+                addLog(`ℹ️ Payment status: ${data.status}`, 'info');
+                document.getElementById('testResult').innerHTML = `
+                    <div class="log-entry info">
+                        <strong>Payment Status</strong><br>
+                        Reference: ${reference}<br>
+                        Status: <span class="status ${data.status === 'PAID' ? 'paid' : 'pending'}">${data.status}</span>
+                        ${data.session_id ? `<br>Session ID: ${data.session_id}` : ''}
+                    </div>
+                `;
+            } catch (error) {
+                addLog(`❌ Failed to check payment: ${error.message}`, 'error');
+            }
+        }
+
+        function clearLog() {
+            logEntries = [];
+            document.getElementById('activityLog').innerHTML = '<div class="log-entry info"><span class="timestamp">[System]</span><span>Log cleared</span></div>';
+        }
+
+        function exportLog() {
+            const logText = logEntries.map(e => `[${e.timestamp}] ${e.type.toUpperCase()}: ${e.message}`).join('\n');
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `webhook-debug-${new Date().toISOString()}.log`;
+            a.click();
+            URL.revokeObjectURL(url);
+            addLog('💾 Log exported', 'success');
+        }
+
+        setInterval(() => { checkHealth(); loadPayments(); }, 30000);
+        window.addEventListener('DOMContentLoaded', () => {
+            checkHealth();
+            loadWebhookInfo();
+            loadPayments();
+            addLog('🚀 Debugger ready', 'success');
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,5 @@
 """
-Helmet Sanitizer Kiosk - PayMongo QRPh Integration (FIXED)
-Uses the correct QRPh Generate API endpoint
+Helmet Sanitizer Kiosk - PayMongo QRPh Integration (COMPLETE FIXED VERSION)
 """
 
 from flask import Flask, render_template, jsonify, url_for, request, redirect, session
@@ -10,11 +9,12 @@ import qrcode
 import base64
 import time
 import sqlite3
+import json
+import re
 from io import BytesIO
 from datetime import datetime, timedelta
 from functools import wraps
-from urllib.parse import urlencode  # Add this import
-
+from urllib.parse import urlencode
 
 # --- Raspberry Pi GPIO Setup ---
 try:
@@ -32,24 +32,25 @@ app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "change-this-secret-key-in-pr
 # --- PayMongo Configuration ---
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY", "sk_live_bM912rC4nCCyYNyToVkb3qfv")
 PAYMONGO_PUBLIC_KEY = os.getenv("PAYMONGO_PUBLIC_KEY", "pk_live_K85mpvqom3eJtEDsDWJcziTA")
+PAYMONGO_WEBHOOK_SECRET = os.getenv("PAYMONGO_WEBHOOK_SECRET", "")
 PAYMONGO_API_URL = "https://api.paymongo.com/v1"
 
 # Solana Pay Configuration
 SOLANA_RECIPIENT_ADDRESS = os.getenv("SOLANA_RECIPIENT_ADDRESS", "YOUR_SOLANA_WALLET_ADDRESS")
-SOLANA_AMOUNT = float(os.getenv("SOLANA_AMOUNT", "0.01"))  # Amount in SOL
+SOLANA_AMOUNT = float(os.getenv("SOLANA_AMOUNT", "0"))
 SOLANA_LABEL = "Helmet Sanitizer"
 SOLANA_MESSAGE = "Payment for helmet sanitization service"
-SOLANA_NETWORK = os.getenv("SOLANA_NETWORK", "devnet")  # devnet or mainnet-beta
+SOLANA_NETWORK = os.getenv("SOLANA_NETWORK", "devnet")
 
 # Admin Configuration
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 # Payment Amount
-PAYMENT_AMOUNT = 1.00  # PHP
+PAYMENT_AMOUNT = 1.00  # PHP (changed from 3.00 to match your webhook)
 
 # GPIO Configuration
-SANITIZER_PIN = 18  # BCM numbering
+SANITIZER_PIN = 18
 if RPI_AVAILABLE:
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(SANITIZER_PIN, GPIO.OUT, initial=GPIO.LOW)
@@ -57,9 +58,8 @@ if RPI_AVAILABLE:
 # In-memory payment tracking
 payments = {}
 
-
 # ========================================
-# DATABASE FUNCTIONS (same as before)
+# DATABASE FUNCTIONS
 # ========================================
 
 def init_db():
@@ -78,7 +78,8 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             paid_at TIMESTAMP,
             paymongo_id TEXT,
-            qr_code TEXT
+            qr_code TEXT,
+            reference_id TEXT
         )
     ''')
     
@@ -129,15 +130,15 @@ def get_db():
     return conn
 
 
-def save_payment(reference, method, amount, status='PENDING', paymongo_id=None, qr_code=None):
+def save_payment(reference, method, amount, status='PENDING', paymongo_id=None, qr_code=None, reference_id=None):
     """Save payment to database."""
     conn = get_db()
     c = conn.cursor()
     try:
         c.execute('''
-            INSERT INTO payments (reference, payment_method, amount, status, paymongo_id, qr_code)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (reference, method, amount, status, paymongo_id, qr_code))
+            INSERT INTO payments (reference, payment_method, amount, status, paymongo_id, qr_code, reference_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (reference, method, amount, status, paymongo_id, qr_code, reference_id))
         conn.commit()
         payment_id = c.lastrowid
         conn.close()
@@ -147,16 +148,25 @@ def save_payment(reference, method, amount, status='PENDING', paymongo_id=None, 
         return None
 
 
-def update_payment_status(reference, status):
+def update_payment_status(reference, status, paymongo_payment_id=None):
     """Update payment status."""
     conn = get_db()
     c = conn.cursor()
     paid_at = datetime.now() if status == 'PAID' else None
-    c.execute('''
-        UPDATE payments 
-        SET status = ?, paid_at = ?
-        WHERE reference = ?
-    ''', (status, paid_at, reference))
+    
+    if paymongo_payment_id:
+        c.execute('''
+            UPDATE payments 
+            SET status = ?, paid_at = ?, paymongo_id = ?
+            WHERE reference = ?
+        ''', (status, paid_at, paymongo_payment_id, reference))
+    else:
+        c.execute('''
+            UPDATE payments 
+            SET status = ?, paid_at = ?
+            WHERE reference = ?
+        ''', (status, paid_at, reference))
+    
     conn.commit()
     conn.close()
 
@@ -268,7 +278,6 @@ def update_daily_stats():
 
 init_db()
 
-
 # ========================================
 # HELPER FUNCTIONS
 # ========================================
@@ -277,7 +286,7 @@ def trigger_sanitizer():
     """Activate sanitizer relay."""
     if not RPI_AVAILABLE:
         print("💡 [SIMULATION] Sanitizer running for 10 seconds...")
-        time.sleep(1)
+        time.sleep(10)
         print("✅ [SIMULATION] Sanitizer complete")
         return
     
@@ -298,6 +307,17 @@ def login_required(f):
     return decorated_function
 
 
+def create_paymongo_headers():
+    """Create authenticated headers for PayMongo API."""
+    auth_string = f"{PAYMONGO_SECRET_KEY}:"
+    auth_b64 = base64.b64encode(auth_string.encode('utf-8')).decode('utf-8')
+    
+    return {
+        "accept": "application/json",
+        "Content-Type": "application/json",
+        "authorization": f"Basic {auth_b64}"
+    }
+
 # ========================================
 # KIOSK ROUTES
 # ========================================
@@ -312,6 +332,7 @@ def home():
 def qr_payment():
     """QRPh payment screen."""
     return render_template("qr_payment.html")
+
 
 @app.route("/solana_pay")
 def solana_pay():
@@ -331,45 +352,47 @@ def rating_page(session_id):
     return render_template("rating.html", session_id=session_id)
 
 
+@app.route("/debug")
+@login_required
+def debug_page():
+    """Webhook debugger page."""
+    return render_template("debug.html")
+
 # ========================================
-# PAYMONGO QRPh PAYMENT - FIXED VERSION
+# PAYMONGO QRPh PAYMENT
 # ========================================
 
 @app.route("/create_payment", methods=["POST"])
 def create_payment():
-    """Create PayMongo QRPh payment using the correct API."""
+    """Create PayMongo QRPh payment."""
     reference = f"helmet-{int(time.time())}-{os.urandom(3).hex()}"
     amount = PAYMENT_AMOUNT
     
     try:
-        # Create Basic Auth header
-        auth_string = f"{PAYMONGO_SECRET_KEY}:"
-        auth_b64 = base64.b64encode(auth_string.encode('utf-8')).decode('utf-8')
+        headers = create_paymongo_headers()
         
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json",
-            "authorization": f"Basic {auth_b64}"
-        }
-        
-        # Use the CORRECT QRPh Generate API endpoint
+        # Create QRPh payment
         payload = {
             "data": {
                 "attributes": {
-                    "kind": "instore",  # For kiosk/in-store payments
-                    "amount": int(amount * 100),  # Convert to centavos
+                    "kind": "instore",
+                    "amount": int(amount * 100),
                     "currency": "PHP",
                     "reference_number": reference,
-                    "description": "Helmet Sanitization Service"
+                    "description": f"Helmet Sanitization - Ref: {reference}",
+                    "metadata": {
+                        "reference_number": reference,
+                        "product": "helmet_sanitization",
+                        "kiosk_id": "helmet_kiosk_001"
+                    }
                 }
             }
         }
         
         print(f"🔵 Creating PayMongo QRPh for ₱{amount}")
         print(f"   Reference: {reference}")
-        print(f"   Using endpoint: {PAYMONGO_API_URL}/qrph/generate")
         
-        # Call the correct QRPh endpoint
+        # Call the QRPh endpoint
         response = requests.post(
             f"{PAYMONGO_API_URL}/qrph/generate",
             json=payload,
@@ -387,16 +410,15 @@ def create_payment():
             }), 400
         
         response_data = response.json()
-        print(f"   Response Data: {response_data}")
         
         # Extract QR code from response
         qrph_data = response_data.get('data', {})
         qrph_id = qrph_data.get('id')
         attributes = qrph_data.get('attributes', {})
         
-        # PayMongo returns the QR code as base64 PNG in 'qr_image' field
-        qr_image_data = attributes.get('qr_image')  # Already base64 encoded PNG
-        reference_id = attributes.get('reference_id')  # Short reference
+        # PayMongo returns the QR code as base64 PNG
+        qr_image_data = attributes.get('qr_image')
+        reference_id = attributes.get('reference_id')
         
         if not qr_image_data:
             print(f"❌ No QR code image in response")
@@ -404,9 +426,8 @@ def create_payment():
         
         print(f"   QRPh ID: {qrph_id}")
         print(f"   Reference ID: {reference_id}")
-        print(f"   QR Image: Received (base64 PNG)")
         
-        # Extract base64 data (remove data:image/png;base64, prefix if present)
+        # Extract base64 data
         if 'base64,' in qr_image_data:
             qr_b64 = qr_image_data.split('base64,')[1]
         else:
@@ -419,7 +440,8 @@ def create_payment():
             amount=amount,
             status='PENDING',
             paymongo_id=qrph_id,
-            qr_code=reference_id  # Store the reference_id for lookup
+            qr_code=reference_id,
+            reference_id=reference_id
         )
         
         # Store in memory
@@ -434,6 +456,7 @@ def create_payment():
         print(f"✅ PayMongo QRPh Payment Created Successfully")
         
         return jsonify({
+            "success": True,
             "reference": reference,
             "qr_image": qr_b64,
             "amount": f"₱{amount:.2f}",
@@ -455,210 +478,343 @@ def create_payment():
 
 @app.route("/check_payment/<ref>", methods=["GET"])
 def check_payment(ref):
-    """Check payment status by querying PayMongo API."""
-    print(f"🔍 Checking payment status for reference: {ref}")
+    """Check payment status."""
+    print(f"🔍 Checking payment: {ref}")
     
     # Check database first
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('SELECT * FROM payments WHERE reference = ?', (ref,))
-    payment = c.fetchone()
-    conn.close()
-    
+    payment = get_payment_by_reference(ref)
     if not payment:
-        print(f"❌ Payment not found in database: {ref}")
         return jsonify({"status": "NOT_FOUND"}), 404
     
-    payment_dict = dict(payment)
-    
     # If already paid, return immediately
-    if payment_dict["status"] == "PAID":
-        print(f"✅ Payment already marked as PAID: {ref}")
-        return jsonify({"status": "PAID"})
-    
-    # Query PayMongo API to check status
-    qrph_id = payment_dict["paymongo_id"]
-    
-    if not qrph_id:
-        print(f"⚠️ No PayMongo ID for reference: {ref}")
-        return jsonify({"status": payment_dict["status"]})
-    
-    try:
-        # Create authentication
-        auth_string = f"{PAYMONGO_SECRET_KEY}:"
-        auth_b64 = base64.b64encode(auth_string.encode('utf-8')).decode('utf-8')
-        
-        headers = {
-            "accept": "application/json",
-            "authorization": f"Basic {auth_b64}"
-        }
-        
-        print(f"🔗 Querying PayMongo for QRPh ID: {qrph_id}")
-        
-        # Try different endpoints for checking QRPh status
-        endpoints_to_try = [
-            f"{PAYMONGO_API_URL}/qrph/codes/{qrph_id}",
-            f"{PAYMONGO_API_URL}/qrph/payments/{qrph_id}",
-            f"{PAYMONGO_API_URL}/payments/{qrph_id}"
-        ]
-        
-        response_data = None
-        for endpoint in endpoints_to_try:
-            try:
-                print(f"   Trying endpoint: {endpoint}")
-                response = requests.get(endpoint, headers=headers, timeout=5)
-                
-                if response.status_code == 200:
-                    response_data = response.json()
-                    print(f"✅ Got response from {endpoint}")
-                    break
-            except Exception as e:
-                print(f"   Endpoint failed: {e}")
-                continue
-        
-        if not response_data:
-            print(f"❌ All PayMongo endpoints failed for {qrph_id}")
-            return jsonify({"status": payment_dict["status"]})
-        
-        print(f"📊 Response data: {response_data}")
-        
-        # Extract status from response
-        # Try different possible locations for the status
-        data = response_data.get('data', {})
-        attributes = data.get('attributes', {})
-        
-        # PayMongo returns status in different places depending on the endpoint
-        status = None
-        
-        if attributes.get('status'):  # From /qrph/codes/{id}
-            status = attributes.get('status')
-        elif attributes.get('data', {}).get('attributes', {}).get('status'):  # From webhook-style
-            status = attributes.get('data', {}).get('attributes', {}).get('status')
-        elif data.get('status'):  # Direct status
-            status = data.get('status')
-        
-        print(f"📈 Extracted status: {status}")
-        
-        if status == 'paid':
-            # Update database
-            conn = get_db()
-            c = conn.cursor()
-            c.execute('''
-                UPDATE payments 
-                SET status = 'PAID', paid_at = ?
-                WHERE reference = ?
-            ''', (datetime.now(), ref))
-            conn.commit()
-            conn.close()
-            
-            # Trigger sanitizer
-            session_id = save_sanitization_session(payment_dict["id"])
-            
-            print(f"💰 Payment PAID! Triggering sanitizer for session {session_id}")
-            trigger_sanitizer()
-            
-            complete_sanitization_session(session_id)
-            update_daily_stats()
-            
-            return jsonify({"status": "PAID", "session_id": session_id})
-        
-        elif status in ['expired', 'cancelled', 'failed']:
-            # Update to failed
-            conn = get_db()
-            c = conn.cursor()
-            c.execute('''
-                UPDATE payments 
-                SET status = 'FAILED'
-                WHERE reference = ?
-            ''', (ref,))
-            conn.commit()
-            conn.close()
-            return jsonify({"status": "FAILED"})
-        
-        # Still pending
-        return jsonify({"status": "PENDING"})
-    
-    except Exception as e:
-        print(f"❌ Error checking payment: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"status": payment_dict["status"]})
-
-
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    """Handle PayMongo webhook for QRPh payments."""
-    data = request.get_json()
-    
-    print(f"📩 Webhook Received: {data}")
-    
-    if not data:
-        return jsonify({"error": "No data"}), 400
-    
-    # PayMongo webhook structure for QRPh payments
-    event_data = data.get("data", {})
-    event_type = event_data.get("attributes", {}).get("type")
-    
-    print(f"📩 Event Type: {event_type}")
-    
-    # Handle payment.paid event (when QRPh is scanned and paid)
-    if event_type == "payment.paid":
-        payment_data = event_data.get("attributes", {}).get("data", {})
-        payment_attrs = payment_data.get("attributes", {})
-        
-        # Get the reference number from PayMongo
-        reference_number = payment_attrs.get("metadata", {}).get("reference_number")
-        payment_id = payment_data.get("id")
-        amount = payment_attrs.get("amount", 0) / 100  # Convert centavos to PHP
-        
-        print(f"💰 Payment Paid!")
-        print(f"   PayMongo ID: {payment_id}")
-        print(f"   Reference: {reference_number}")
-        print(f"   Amount: ₱{amount}")
-        
-        if not reference_number:
-            print("⚠️ No reference number in webhook")
-            return jsonify({"error": "No reference"}), 400
-        
-        # Find payment by reference
+    if payment["status"] == "PAID":
+        # Get session ID if exists
         conn = get_db()
         c = conn.cursor()
-        c.execute('SELECT * FROM payments WHERE reference = ?', (reference_number,))
-        payment = c.fetchone()
+        c.execute('SELECT id FROM sanitization_sessions WHERE payment_id = ? ORDER BY id DESC LIMIT 1', (payment["id"],))
+        session = c.fetchone()
         conn.close()
         
-        if payment:
-            payment_dict = dict(payment)
-            
-            # Update payment status
-            update_payment_status(reference_number, "PAID")
-            
-            # Update memory
-            if reference_number in payments:
-                payments[reference_number]["status"] = "PAID"
-            
-            # Create sanitization session
-            session_id = save_sanitization_session(payment_dict["id"])
-            
-            if reference_number in payments:
-                payments[reference_number]["session_id"] = session_id
-            
-            print(f"🧼 Triggering sanitizer for session {session_id}")
-            
-            # Trigger sanitizer
-            trigger_sanitizer()
-            
-            # Complete sanitization
-            complete_sanitization_session(session_id)
-            
-            # Update stats
-            update_daily_stats()
-            
-            print(f"✅ Payment processed successfully: {reference_number}")
-        else:
-            print(f"❌ Payment not found in database: {reference_number}")
+        session_id = session[0] if session else payment.get("id")
+        return jsonify({"status": "PAID", "session_id": session_id})
     
-    return jsonify({"success": True}), 200
+    # For testing/demo: Allow manual marking as paid via query parameter
+    if request.args.get('test') == 'true':
+        print(f"🧪 Test mode: Manually marking {ref} as PAID")
+        return mark_payment_as_paid(ref, payment["id"])
+    
+    return jsonify({"status": "PENDING"})
+
+
+def mark_payment_as_paid(ref, payment_db_id):
+    """Mark payment as paid and trigger sanitizer."""
+    # Update payment status
+    update_payment_status(ref, "PAID")
+    
+    # Create sanitization session
+    session_id = save_sanitization_session(payment_db_id)
+    
+    # Update memory
+    if ref in payments:
+        payments[ref]["status"] = "PAID"
+        payments[ref]["session_id"] = session_id
+    
+    print(f"🧼 Triggering sanitizer for session {session_id}")
+    
+    # Trigger sanitizer
+    trigger_sanitizer()
+    
+    # Complete sanitization
+    complete_sanitization_session(session_id)
+    
+    # Update stats
+    update_daily_stats()
+    
+    print(f"✅ Payment {ref} completed successfully!")
+    
+    return jsonify({"status": "PAID", "session_id": session_id})
+
+# ========================================
+# PAYMONGO WEBHOOK (FIXED VERSION)
+# ========================================
+
+@app.route("/paymongo_webhook", methods=["POST"])
+def paymongo_webhook():
+    """
+    PayMongo webhook endpoint - FIXED VERSION
+    """
+    print("\n" + "="*60)
+    print("📩 PAYMONGO WEBHOOK RECEIVED")
+    print("="*60)
+    
+    try:
+        # Get raw data and try to parse it
+        raw_data = request.get_data(as_text=True)
+        print(f"📦 Raw data length: {len(raw_data)} bytes")
+        
+        # Try to parse as JSON
+        try:
+            data = json.loads(raw_data)
+            print(f"📊 Parsed JSON successfully")
+            print(f"📋 Data keys: {list(data.keys())}")
+            
+            # Log the full data structure for debugging
+            print("\n📋 WEBHOOK DATA STRUCTURE:")
+            print(json.dumps(data, indent=2)[:1000])  # First 1000 chars
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON parsing error: {e}")
+            print(f"📄 Raw data preview: {raw_data[:500]}")
+            return jsonify({"received": True}), 200
+        
+        # Handle different webhook formats
+        event_type = data.get("type") or data.get("event")
+        
+        # Also check nested event type
+        if not event_type and data.get("data") and isinstance(data["data"], dict):
+            nested_attrs = data["data"].get("attributes", {})
+            event_type = nested_attrs.get("type")
+        
+        print(f"🎯 Event Type: {event_type}")
+        
+        # Handle payment.paid event
+        if event_type in ["payment.paid", "payment.success", "payment_success"]:
+            print("💰 PAYMENT PAID EVENT DETECTED")
+            return process_webhook_payment(data)
+        
+        elif event_type in ["payment.failed", "payment.failure"]:
+            print("❌ PAYMENT FAILED EVENT")
+            return jsonify({"received": True}), 200
+        
+        elif event_type in ["qrpayment.expired", "qr.expired"]:
+            print("⏰ QR PAYMENT EXPIRED EVENT")
+            return jsonify({"received": True}), 200
+        
+        else:
+            print(f"⚠️ Unhandled event type: {event_type}")
+            # Try to process anyway in case it's a payment
+            return process_webhook_payment(data)
+    
+    except Exception as e:
+        print(f"❌ Webhook processing error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"received": True}), 200
+
+
+def process_webhook_payment(data):
+    """Process payment webhook data - FIXED VERSION."""
+    try:
+        # Try different possible data structures
+        payment_data = None
+        event_data = None
+        
+        # NEW: Check if this is an event wrapper (payment.paid structure)
+        if data.get("data") and isinstance(data["data"], dict):
+            # This is the event attributes level
+            event_attrs = data["data"].get("attributes", {})
+            
+            # The actual payment is inside event_attrs.data
+            if event_attrs.get("data") and isinstance(event_attrs["data"], dict):
+                event_data = event_attrs["data"]
+                payment_data = event_data.get("attributes", {})
+                print(f"📦 Found payment in event wrapper structure")
+            
+            # Fallback: direct attributes
+            elif data["data"].get("attributes"):
+                payment_data = data["data"]["attributes"]
+        
+        # Structure 2: direct attributes
+        elif data.get("attributes"):
+            payment_data = data["attributes"]
+        
+        if not payment_data:
+            print("❌ Could not extract payment data from webhook")
+            print(f"🔍 Data structure: {json.dumps(data, indent=2)[:800]}")
+            return jsonify({"received": True}), 200
+        
+        print(f"📋 Payment data keys: {list(payment_data.keys())}")
+        
+        # Extract amount and status
+        amount = payment_data.get("amount", 0)
+        if isinstance(amount, int):
+            amount = amount / 100  # Convert centavos to PHP
+        
+        status = payment_data.get("status", "")
+        description = payment_data.get("description", "")
+        
+        print(f"💰 Amount: ₱{amount:.2f}")
+        print(f"📊 Status: {status}")
+        print(f"📝 Description: {description}")
+        
+        # Get the payment ID from the event data
+        payment_id_from_webhook = None
+        if event_data:
+            payment_id_from_webhook = event_data.get("id")
+            print(f"🆔 Payment ID: {payment_id_from_webhook}")
+        
+        # NEW: Try to get the QRPh ID from the source
+        source = payment_data.get("source", {})
+        qrph_id = None
+        if isinstance(source, dict):
+            qrph_id = source.get("id")
+            print(f"🔍 QRPh ID from source: {qrph_id}")
+        
+        # Strategy 1: Get reference from metadata
+        metadata = payment_data.get("metadata") or {}
+        reference = metadata.get("reference_number") if isinstance(metadata, dict) else None
+        if reference:
+            print(f"✅ Reference from metadata: {reference}")
+        
+        # Strategy 2: Get from billing
+        if not reference:
+            billing = payment_data.get("billing") or {}
+            reference = billing.get("reference_number") or billing.get("reference") if isinstance(billing, dict) else None
+            if reference:
+                print(f"✅ Reference from billing: {reference}")
+        
+        # Strategy 3: Extract from description (QR id pattern)
+        if not reference and description:
+            # Look for our reference pattern first
+            match = re.search(r'helmet-\d+-[a-f0-9]+', description)
+            if match:
+                reference = match.group(0)
+                print(f"✅ Found reference in description: {reference}")
+        
+        # Strategy 4: NEW - Look up by QRPh ID in database
+        if not reference and qrph_id:
+            print(f"🔍 Searching database for QRPh ID: {qrph_id}")
+            try:
+                conn = get_db()
+                c = conn.cursor()
+                c.execute('SELECT reference FROM payments WHERE paymongo_id = ?', (qrph_id,))
+                result = c.fetchone()
+                conn.close()
+                
+                if result:
+                    reference = result[0]
+                    print(f"✅ Found reference via QRPh ID: {reference}")
+            except Exception as e:
+                print(f"⚠️ Error searching by QRPh ID: {e}")
+        
+        # Strategy 5: NEW - Look up by reference_id or external_reference_number
+        if not reference:
+            external_ref = payment_data.get("external_reference_number") or payment_data.get("reference_id")
+            if external_ref:
+                print(f"🔍 Searching database for external reference: {external_ref}")
+                try:
+                    conn = get_db()
+                    c = conn.cursor()
+                    c.execute('SELECT reference FROM payments WHERE reference_id = ?', (external_ref,))
+                    result = c.fetchone()
+                    conn.close()
+                    
+                    if result:
+                        reference = result[0]
+                        print(f"✅ Found reference via external reference: {reference}")
+                except Exception as e:
+                    print(f"⚠️ Error searching by external ref: {e}")
+        
+        # Strategy 6: LAST RESORT - Search for most recent pending payment with matching amount
+        if not reference and amount > 0:
+            print(f"🔍 Last resort: searching for pending payment with amount ₱{amount:.2f}")
+            try:
+                conn = get_db()
+                c = conn.cursor()
+                c.execute('''
+                    SELECT reference FROM payments 
+                    WHERE status = 'PENDING' 
+                    AND payment_method = 'QRPH'
+                    AND amount = ?
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                ''', (amount,))
+                result = c.fetchone()
+                conn.close()
+                
+                if result:
+                    reference = result[0]
+                    print(f"⚠️ Matched by amount to pending payment: {reference}")
+            except Exception as e:
+                print(f"⚠️ Error searching by amount: {e}")
+        
+        if not reference:
+            print("❌ No reference found in webhook data after all strategies")
+            print(f"📦 Full payment data:")
+            print(json.dumps(payment_data, indent=2)[:1000])
+            return jsonify({"received": True, "error": "No reference found"}), 200
+        
+        print(f"🎯 Processing payment for reference: {reference}")
+        
+        # Find payment in database
+        payment = get_payment_by_reference(reference)
+        if not payment:
+            print(f"⚠️ Payment not found in database: {reference}")
+            # Create new payment record
+            payment_id = save_payment(
+                reference=reference,
+                method='QRPH',
+                amount=amount,
+                status='PAID',
+                paymongo_id=payment_id_from_webhook or qrph_id
+            )
+            if payment_id:
+                payment = {"id": payment_id, "status": "PENDING"}
+                print(f"✅ Created new payment record: {reference}")
+            else:
+                return jsonify({"received": True, "error": "Failed to create payment"}), 200
+        
+        # Skip if already paid
+        if payment["status"] == "PAID":
+            print(f"✅ Payment already marked as PAID: {reference}")
+            return jsonify({"received": True, "already_paid": True}), 200
+        
+        print(f"💳 Updating payment status to PAID...")
+        
+        # Update payment status
+        update_payment_status(reference, "PAID", payment_id_from_webhook or qrph_id)
+        
+        # Create sanitization session
+        session_id = save_sanitization_session(payment["id"])
+        
+        # Update memory
+        if reference in payments:
+            payments[reference]["status"] = "PAID"
+            payments[reference]["session_id"] = session_id
+        else:
+            payments[reference] = {
+                "id": payment["id"],
+                "status": "PAID",
+                "session_id": session_id,
+                "method": "QRPH"
+            }
+        
+        print(f"🧼 Triggering sanitizer for session {session_id}")
+        
+        # Trigger sanitizer
+        trigger_sanitizer()
+        
+        # Complete sanitization
+        complete_sanitization_session(session_id)
+        
+        # Update stats
+        update_daily_stats()
+        
+        print(f"✅ Payment {reference} processed successfully via webhook!")
+        print(f"✅ Session {session_id} completed!")
+        
+        return jsonify({
+            "success": True,
+            "message": "Payment processed",
+            "reference": reference,
+            "session_id": session_id
+        }), 200
+    
+    except Exception as e:
+        print(f"❌ Error processing webhook payment: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"received": True}), 200
 
 # ========================================
 # CASH PAYMENT
@@ -684,10 +840,6 @@ def simulate_cash():
         "message": "Cash received",
         "session_id": session_id
     })
-
-# ========================================
-# SOLANA PAY ROUTES
-# ========================================
 
 # ========================================
 # SOLANA PAY ROUTES
@@ -796,7 +948,7 @@ def confirm_solana_payment():
             return jsonify({"error": "Missing reference"}), 400
         
         # Update payment status
-        update_payment_status(reference, "PAID")
+        update_payment_status(reference, "PAID", signature)
         
         # Update memory
         if reference in payments:
@@ -834,29 +986,6 @@ def confirm_solana_payment():
             "error": "Failed to confirm payment",
             "details": str(e)
         }), 500
-    
-def update_payment_status(reference, status, signature=None):
-    """Update payment status."""
-    conn = get_db()
-    c = conn.cursor()
-    paid_at = datetime.now() if status == 'PAID' else None
-    
-    if signature:
-        c.execute('''
-            UPDATE payments 
-            SET status = ?, paid_at = ?, paymongo_id = ?
-            WHERE reference = ?
-        ''', (status, paid_at, signature, reference))
-    else:
-        c.execute('''
-            UPDATE payments 
-            SET status = ?, paid_at = ?
-            WHERE reference = ?
-        ''', (status, paid_at, reference))
-    
-    conn.commit()
-    conn.close()
-
 
 # ========================================
 # RATING SYSTEM
@@ -887,6 +1016,120 @@ def submit_rating():
     except Exception as e:
         print(f"❌ Rating error: {e}")
         return jsonify({"error": "Failed to save"}), 500
+
+# ========================================
+# TESTING & DEBUGGING ENDPOINTS
+# ========================================
+
+@app.route("/test_payment/<ref>", methods=["GET"])
+def test_payment(ref):
+    """Test endpoint to mark payment as paid."""
+    print(f"🧪 TESTING PAYMENT: {ref}")
+    
+    payment = get_payment_by_reference(ref)
+    if not payment:
+        return jsonify({"error": "Payment not found"}), 404
+    
+    # Update to paid
+    update_payment_status(ref, "PAID")
+    
+    # Create session
+    session_id = save_sanitization_session(payment["id"])
+    
+    # Store session ID
+    if ref in payments:
+        payments[ref]["status"] = "PAID"
+        payments[ref]["session_id"] = session_id
+    
+    print(f"✅ TEST: Payment {ref} marked as paid. Session: {session_id}")
+    
+    return jsonify({
+        "status": "MANUALLY_PAID",
+        "session_id": session_id,
+        "message": "Payment manually marked as paid"
+    })
+
+
+@app.route("/mark_paid/<ref>", methods=["POST"])
+def mark_paid(ref):
+    """Manually mark payment as paid."""
+    print(f"✅ Manually marking payment as paid: {ref}")
+    
+    payment = get_payment_by_reference(ref)
+    if not payment:
+        return jsonify({"error": "Payment not found"}), 404
+    
+    # Update payment status
+    update_payment_status(ref, "PAID")
+    
+    # Create sanitization session
+    session_id = save_sanitization_session(payment["id"])
+    
+    # Update memory
+    if ref in payments:
+        payments[ref]["status"] = "PAID"
+        payments[ref]["session_id"] = session_id
+    
+    # Trigger sanitizer
+    trigger_sanitizer()
+    
+    # Complete sanitization
+    complete_sanitization_session(session_id)
+    
+    # Update stats
+    update_daily_stats()
+    
+    return jsonify({
+        "success": True,
+        "status": "PAID",
+        "session_id": session_id,
+        "message": "Payment manually marked as paid"
+    })
+
+
+@app.route("/payment_paid", methods=["POST"])
+def payment_paid():
+    """Simulate payment paid webhook."""
+    print("💰 SIMULATING PAYMENT PAID WEBHOOK")
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data"}), 400
+    
+    reference = data.get("reference")
+    if not reference:
+        return jsonify({"error": "No reference"}), 400
+    
+    print(f"🔍 Processing simulated payment for: {reference}")
+    
+    payment = get_payment_by_reference(reference)
+    if not payment:
+        return jsonify({"error": "Payment not found"}), 404
+    
+    # Process as paid
+    return mark_payment_as_paid(reference, payment["id"])
+
+
+@app.route("/webhook_debug", methods=["POST"])
+def webhook_debug():
+    """Debug webhook endpoint."""
+    print("\n🔧 WEBHOOK DEBUG ENDPOINT")
+    
+    # Log headers
+    print("📋 Headers:")
+    for key, value in request.headers.items():
+        print(f"   {key}: {value}")
+    
+    # Log raw data
+    raw_data = request.get_data(as_text=True)
+    print(f"📦 Raw data ({len(raw_data)} bytes):")
+    print(raw_data[:500] + "..." if len(raw_data) > 500 else raw_data)
+    
+    return jsonify({
+        "received": True,
+        "headers": dict(request.headers),
+        "data_preview": raw_data[:500] if raw_data else None
+    })
 
 # ========================================
 # ADMIN ROUTES
@@ -1085,8 +1328,9 @@ def admin_analytics():
                          hourly_distribution=[dict(h) for h in hourly_distribution],
                          days=days)
 
-
-
+# ========================================
+# UTILITY ENDPOINTS
+# ========================================
 
 @app.route("/health")
 def health():
@@ -1095,40 +1339,33 @@ def health():
         "status": "OK",
         "gpio_available": RPI_AVAILABLE,
         "database": "connected",
-        "payment_gateway": "PayMongo QRPh"
+        "payment_gateway": "PayMongo QRPh",
+        "webhook_enabled": True,
+        "timestamp": datetime.now().isoformat()
     })
 
 
-@app.route("/test_payment/<ref>", methods=["GET"])
-def test_payment(ref):
-    """Manual test endpoint to mark payment as paid."""
-    print(f"🧪 TEST: Manually marking payment as paid: {ref}")
-    
-    payment = get_payment_by_reference(ref)
-    if not payment:
-        return jsonify({"error": "Payment not found"}), 404
-    
-    # Update to paid
-    update_payment_status(ref, "PAID")
-    
-    # Update memory
-    if ref in payments:
-        payments[ref]["status"] = "PAID"
-    
-    # Create session
-    session_id = save_sanitization_session(payment["id"])
-    
-    # Store session ID
-    if ref in payments:
-        payments[ref]["session_id"] = session_id
-    
-    print(f"✅ TEST: Payment {ref} manually marked as paid. Session: {session_id}")
-    
+@app.route("/webhook_info", methods=["GET"])
+def webhook_info():
+    """Get webhook information."""
     return jsonify({
-        "status": "MANUALLY_PAID",
-        "session_id": session_id,
-        "message": "Payment manually marked as paid"
+        "webhook_url": "https://overgreedy-appealingly-elodia.ngrok-free.dev/paymongo_webhook",
+        "status": "active",
+        "note": "Configure this URL in PayMongo dashboard webhooks"
     })
+
+
+@app.route("/list_payments", methods=["GET"])
+@login_required
+def list_payments():
+    """List all payments."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM payments ORDER BY created_at DESC LIMIT 50')
+    payments_list = c.fetchall()
+    conn.close()
+    
+    return jsonify([dict(p) for p in payments_list])
 
 # ========================================
 # APP RUNNER
@@ -1136,15 +1373,21 @@ def test_payment(ref):
 
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("🚀 HELMET SANITIZER KIOSK - PayMongo QRPh (FIXED)")
+    print("🚀 HELMET SANITIZER KIOSK - COMPLETE FIXED VERSION")
     print("="*60)
     print(f"GPIO: {'YES ✅' if RPI_AVAILABLE else 'NO ⚠️ (Simulation)'}")
     print(f"Payment Gateway: PayMongo QRPh (GCash & Maya)")
     print(f"Database: helmet_sanitizer.db")
+    print(f"Webhook URL: https://overgreedy-appealingly-elodia.ngrok-free.dev/paymongo_webhook")
     print(f"\n📱 Kiosk: http://localhost:5000")
     print(f"🔐 Admin: http://localhost:5000/admin")
     print(f"   Username: {ADMIN_USERNAME}")
     print(f"   Password: {ADMIN_PASSWORD}")
+    print(f"🔍 Debug: http://localhost:5000/debug")
+    print(f"\n🔧 Test Endpoints:")
+    print(f"   Health Check: http://localhost:5000/health")
+    print(f"   Webhook Info: http://localhost:5000/webhook_info")
+    print(f"   Mark Paid: POST http://localhost:5000/mark_paid/<reference>")
     print("="*60 + "\n")
     
     try:
