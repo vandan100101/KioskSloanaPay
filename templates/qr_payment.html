@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Scan to Pay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .back-btn {
+            width: 40px;
+            height: 40px;
+            background: #f5f5f5;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            cursor: pointer;
+            text-decoration: none;
+            color: #333;
+        }
+
+        .header-title {
+            flex: 1;
+        }
+
+        .header-title h1 {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 3px;
+        }
+
+        .header-title p {
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .qr-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .qr-box {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 0 3px #4CAF50;
+            margin: 20px auto;
+            display: inline-block;
+        }
+
+        .qr-box img {
+            width: 240px;
+            height: 240px;
+            display: block;
+        }
+
+        .loader {
+            width: 240px;
+            height: 240px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .amount {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #4CAF50;
+            margin: 15px 0;
+        }
+
+        .status {
+            color: #666;
+            font-size: 0.95em;
+            margin: 15px 0;
+        }
+
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .step {
+            width: 35px;
+            height: 35px;
+            background: #f5f5f5;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #999;
+            border: 2px solid #e0e0e0;
+        }
+
+        .step.active {
+            background: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+
+        .step.done {
+            background: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+
+        .step.done::before {
+            content: '✓';
+        }
+
+        .providers {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .provider {
+            background: #f5f5f5;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .test-btn {
+            margin-top: 20px;
+            padding: 12px 25px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .test-btn:active {
+            transform: scale(0.98);
+        }
+
+        .success-icon {
+            font-size: 5em;
+            margin: 20px 0;
+        }
+        
+        /* Debug button */
+        .debug-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" class="back-btn">←</a>
+        <div class="header-title">
+            <h1>Scan to Pay</h1>
+            <p>Use any e-wallet app</p>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="qr-container">
+            <!-- Updated ID to match JavaScript -->
+            <div id="qrSection">
+                <div class="qr-box">
+                    <div class="loader">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+                <p class="status" id="statusMessage">Generating QR code...</p>
+            </div>
+
+            <div class="steps">
+                <div class="step active">1</div>
+                <div class="step">2</div>
+                <div class="step">3</div>
+            </div>
+            
+            <!-- Add sanitization animation container -->
+            <div id="sanitizingAnimation" style="display: none; text-align: center; margin-top: 20px;">
+                <div class="sanitizing-icon" style="font-size: 3em;">🧼</div>
+                <div class="sanitizing-text" style="margin-top: 10px; font-weight: 600;">Sanitizing in progress...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Button -->
+    <button class="debug-button" onclick="testManualSuccess()">Test Payment</button>
+
+    <script>
+        // Global variables
+        let paymentReference = '';
+        let pollingInterval = null;
+
+        // Initialize payment process
+        async function initPayment() {
+            try {
+                showStatus('🔗 Connecting to payment gateway...', 'waiting');
+                console.log('🔄 Creating payment request...');
+                
+                const response = await fetch('/create_payment', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('📦 Create payment response:', data);
+
+                if (data.error) {
+                    throw new Error(data.error + ': ' + (data.details || ''));
+                }
+
+                if (!data.qr_image) {
+                    throw new Error('Failed to generate QR code');
+                }
+
+                // Store reference for later use
+                paymentReference = data.reference || data.payment_reference;
+                console.log('✅ QR code generated. Reference:', paymentReference);
+                console.log('💰 Amount:', data.amount);
+
+                // Display QR code
+                const qrSection = document.getElementById('qrSection');
+                qrSection.innerHTML = `
+                    <div class="qr-box">
+                        <img src="data:image/png;base64,${data.qr_image}" alt="QR Code" id="qrImage">
+                    </div>
+                    <div class="amount">${data.amount || '₱0.00'}</div>
+                    <p class="status" id="statusMessage">📱 Scan QR to pay...</p>
+                    ${paymentReference ? `<p class="status" style="font-size: 0.8em; margin-top: 5px; color: #666;">
+                        Ref: ${paymentReference.substring(0, 20)}...
+                    </p>` : ''}
+                    <div class="providers">
+                        <span class="provider">GCash</span>
+                        <span class="provider">Maya</span>
+                        <span class="provider">PayMaya</span>
+                    </div>
+                `;
+                
+                showStatus('💳 Scan QR to pay...', 'waiting');
+                
+                // Start polling for payment status
+                startPaymentPolling();
+                
+            } catch (error) {
+                console.error('❌ Payment initialization error:', error);
+                const qrSection = document.getElementById('qrSection');
+                qrSection.innerHTML = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 3.5em; color: #f44336;">⚠️</div>
+                        <h3 style="margin-top: 15px;">Error</h3>
+                        <p style="margin-top: 10px; font-size: 0.85em; opacity: 0.8;">${error.message}</p>
+                        <button onclick="window.location.href='/'" 
+                                style="margin-top: 20px; padding: 10px 20px; background: #f44336; 
+                                       color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
+                            Go Back
+                        </button>
+                    </div>
+                `;
+                showStatus('❌ Payment setup failed', 'error');
+                stopPaymentPolling();
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type = 'waiting') {
+            const statusMsg = document.getElementById('statusMessage');
+            if (statusMsg) {
+                statusMsg.textContent = message;
+                // You can add different styling based on type if needed
+                console.log(`📢 Status: ${message} (${type})`);
+            }
+        }
+
+        // Start polling for payment status
+        function startPaymentPolling() {
+            console.log('🔍 Starting payment polling for reference:', paymentReference);
+            
+            if (!paymentReference) {
+                console.error('❌ No payment reference to poll');
+                return;
+            }
+            
+            // Clear any existing interval
+            stopPaymentPolling();
+            
+            // Update progress steps
+            const steps = document.querySelectorAll('.step');
+            steps[0].classList.add('done');
+            steps[1].classList.add('active');
+            
+            let pollCount = 0;
+            const maxPolls = 100; // 5 minutes max
+            
+            pollingInterval = setInterval(async () => {
+                pollCount++;
+                console.log(`📊 Poll attempt ${pollCount} for reference: ${paymentReference}`);
+                
+                try {
+                    const response = await fetch(`/check_payment/${paymentReference}`);
+                    
+                    if (!response.ok) {
+                        console.error(`❌ API Error ${response.status} for poll ${pollCount}`);
+                        if (pollCount >= maxPolls) {
+                            handlePollingTimeout();
+                        }
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    console.log(`📦 Poll ${pollCount} response:`, data);
+                    
+                    switch(data.status) {
+                        case 'PAID':
+                        case 'SUCCESS':
+                            console.log('✅ Payment confirmed!');
+                            handlePaymentSuccess(data.session_id || data.reference);
+                            break;
+                            
+                        case 'FAILED':
+                        case 'CANCELLED':
+                        case 'EXPIRED':
+                            console.log(`❌ Payment ${data.status}`);
+                            handlePaymentFailure(data.status);
+                            break;
+                            
+                        case 'NOT_FOUND':
+                            console.log('❌ Payment not found');
+                            handlePaymentNotFound();
+                            break;
+                            
+                        default:
+                            // Still pending
+                            console.log('⏳ Payment still pending');
+                            showStatus('⏳ Waiting for payment... Scan the QR code');
+                            
+                            // Show time elapsed every 10 polls
+                            if (pollCount % 10 === 0) {
+                                const secondsElapsed = pollCount * 3;
+                                console.log(`⏰ Still waiting... (${secondsElapsed} seconds elapsed)`);
+                                showStatus(`⏳ Waiting... ${Math.floor(secondsElapsed/60)}m ${secondsElapsed%60}s elapsed`);
+                            }
+                    }
+                    
+                    // Check for timeout
+                    if (pollCount >= maxPolls) {
+                        handlePollingTimeout();
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Polling error:', error);
+                    showStatus('⚠️ Connection issue, retrying...');
+                    
+                    if (pollCount >= maxPolls) {
+                        handlePollingTimeout();
+                    }
+                }
+            }, 3000); // Check every 3 seconds
+            
+            // Safety timeout after 5 minutes
+            setTimeout(() => {
+                if (pollingInterval) {
+                    handlePollingTimeout();
+                }
+            }, 300000);
+        }
+
+        // Stop polling
+        function stopPaymentPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                console.log('🛑 Polling stopped');
+            }
+        }
+
+        // Handle payment success
+        function handlePaymentSuccess(sessionId) {
+            stopPaymentPolling();
+            
+            // Update progress steps
+            const steps = document.querySelectorAll('.step');
+            steps[1].classList.add('done');
+            steps[2].classList.add('active');
+            
+            // Show success animation
+            const qrSection = document.getElementById('qrSection');
+            qrSection.innerHTML = `
+                <div class="success-icon">✅</div>
+                <h2 style="color: #4CAF50; font-size: 1.3em; font-weight: 700;">Payment Confirmed!</h2>
+                <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;">Transaction successful</p>
+                ${sessionId ? `<p style="margin-top: 5px; font-size: 0.8em; color: #666;">
+                    Session: ${sessionId}
+                </p>` : ''}
+                <button class="test-btn" onclick="startSanitization('${sessionId || ''}')">
+                    Start Sanitization
+                </button>
+            `;
+            
+            showStatus('✅ Payment successful!');
+        }
+
+        // Handle payment failure
+        function handlePaymentFailure(status) {
+            stopPaymentPolling();
+            
+            const errorMessages = {
+                'FAILED': 'Payment failed',
+                'CANCELLED': 'Payment cancelled',
+                'EXPIRED': 'Payment expired'
+            };
+            
+            const message = errorMessages[status] || 'Payment failed';
+            showStatus(`❌ ${message}`);
+            
+            const qrSection = document.getElementById('qrSection');
+            qrSection.innerHTML += `
+                <div style="margin-top: 20px; padding: 15px; background: rgba(244, 67, 54, 0.1); border-radius: 10px;">
+                    <p style="font-size: 0.9em; color: #f44336;">${message}. Please try again.</p>
+                    <button onclick="window.location.reload()" 
+                            style="margin-top: 10px; padding: 8px 15px; background: #4CAF50; 
+                                   color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `;
+        }
+
+        // Handle payment not found
+        function handlePaymentNotFound() {
+            stopPaymentPolling();
+            showStatus('❌ Payment not found');
+            
+            const qrSection = document.getElementById('qrSection');
+            qrSection.innerHTML += `
+                <div style="margin-top: 20px; padding: 15px; background: rgba(255, 152, 0, 0.1); border-radius: 10px;">
+                    <p style="font-size: 0.9em; color: #ff9800;">Payment reference not found. Please start over.</p>
+                    <button onclick="window.location.href='/'" 
+                            style="margin-top: 10px; padding: 8px 15px; background: #4CAF50; 
+                                   color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Go Home
+                    </button>
+                </div>
+            `;
+        }
+
+        // Handle polling timeout
+        function handlePollingTimeout() {
+            stopPaymentPolling();
+            console.log('⏰ Polling timeout after 5 minutes');
+            showStatus('⏱️ Payment timeout');
+            
+            const qrSection = document.getElementById('qrSection');
+            qrSection.innerHTML += `
+                <div style="margin-top: 20px; padding: 15px; background: rgba(255, 152, 0, 0.1); border-radius: 10px;">
+                    <p style="font-size: 0.9em; color: #ff9800;">Payment session expired. Please try again.</p>
+                    <button onclick="window.location.reload()" 
+                            style="margin-top: 10px; padding: 8px 15px; background: #4CAF50; 
+                                   color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `;
+        }
+
+        // Start sanitization process
+        function startSanitization(sessionId) {
+            console.log('🧼 Starting sanitization for session:', sessionId);
+            
+            // Hide QR section and show sanitization animation
+            document.getElementById('qrSection').style.display = 'none';
+            document.getElementById('sanitizingAnimation').style.display = 'block';
+            
+            // Update progress steps
+            const steps = document.querySelectorAll('.step');
+            steps[2].classList.add('done');
+            
+            // Complete after 10 seconds
+            setTimeout(() => completeSanitization(sessionId), 10000);
+        }
+
+        // Complete sanitization
+        function completeSanitization(sessionId) {
+            console.log('✅ Sanitization complete for session:', sessionId);
+            
+            const sanitizingAnimation = document.getElementById('sanitizingAnimation');
+            
+            sanitizingAnimation.innerHTML = `
+                <div style="text-align: center;">
+                    <div style="font-size: 5em; color: #4CAF50;">✨</div>
+                    <h2 style="color: #4CAF50; margin-top: 15px;">Complete!</h2>
+                    <p style="margin-top: 10px; font-size: 1.1em; font-weight: 600;">Helmet is clean & safe</p>
+                    <p style="margin-top: 10px; font-size: 0.95em; opacity: 0.8;">Thank you for using our service</p>
+                    ${sessionId ? `<p style="margin-top: 5px; font-size: 0.9em; color: #666;">
+                        Session: ${sessionId}
+                    </p>` : ''}
+                    <div style="margin-top: 25px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                        <button onclick="goToRating('${sessionId || ''}')" 
+                                style="padding: 12px 25px; background: #4CAF50; 
+                                       color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; width: 200px;">
+                            Rate Service
+                        </button>
+                        <button onclick="window.location.href='/'" 
+                                style="padding: 12px 25px; background: #2196F3; 
+                                       color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; width: 200px;">
+                            Done
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Go to rating page
+        function goToRating(sessionId) {
+            if (sessionId) {
+                window.location.href = `/rating/${sessionId}`;
+            } else {
+                window.location.href = '/rating';
+            }
+        }
+
+        // Test manual success (debug function)
+        async function testManualSuccess() {
+            if (!paymentReference) {
+                console.log('❌ No payment reference found');
+                alert('Please generate a QR code first');
+                return;
+            }
+            
+            console.log('🧪 Testing manual success for:', paymentReference);
+            showStatus('🧪 Testing manual payment...');
+            
+            try {
+                const response = await fetch(`/test_payment/${paymentReference}`);
+                if (!response.ok) {
+                    throw new Error(`Test failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('🧪 Test result:', data);
+                
+                if (data.status === 'PAID' || data.status === 'SUCCESS') {
+                    showStatus('✅ Manual test successful!');
+                    handlePaymentSuccess(data.session_id || data.reference);
+                } else {
+                    showStatus('❌ Manual test failed');
+                }
+            } catch (error) {
+                console.error('❌ Manual test error:', error);
+                showStatus('❌ Test failed: ' + error.message);
+            }
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 QR Payment Page Loaded');
+            initPayment();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopPaymentPolling();
+            console.log('👋 Page unloading, cleanup complete');
+        });
+    </script>
+</body>
+</html>

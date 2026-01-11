@@ -1,0 +1,357 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+        <title>Helmet Sanitizer</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                background: #f5f5f5;
+                height: 100vh;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .header {
+                background: white;
+                padding: 20px;
+                text-align: center;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+
+            .logo {
+                font-size: 2.5em;
+                margin-bottom: 5px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+                color: #333;
+                font-weight: 600;
+                margin-bottom: 5px;
+            }
+
+            .subtitle {
+                color: #666;
+                font-size: 0.9em;
+            }
+
+            .main {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                padding: 30px 20px;
+                gap: 15px;
+            }
+
+            .payment-card {
+                background: white;
+                border-radius: 15px;
+                padding: 30px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border: 2px solid transparent;
+            }
+
+            .payment-card:active {
+                transform: scale(0.98);
+                border-color: #4CAF50;
+            }
+
+            .payment-icon {
+                font-size: 3em;
+                margin-bottom: 10px;
+            }
+
+            .payment-title {
+                font-size: 1.3em;
+                font-weight: 600;
+                color: #333;
+                margin-bottom: 5px;
+            }
+
+            .payment-desc {
+                color: #666;
+                font-size: 0.9em;
+                margin-bottom: 10px;
+            }
+
+            .payment-price {
+                font-size: 2em;
+                font-weight: 700;
+                color: #4CAF50;
+            }
+
+            .footer {
+                background: white;
+                padding: 15px;
+                text-align: center;
+                color: #999;
+                font-size: 0.85em;
+                box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            }
+
+            .help-btn {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                width: 45px;
+                height: 45px;
+                background: white;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.3em;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                cursor: pointer;
+                color: #666;
+            }
+
+            .help-btn:active {
+                transform: scale(0.95);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="help-btn" onclick="showHelp()">?</div>
+
+        <div class="header">
+            <div class="logo">🪖</div>
+            <h1>Helmet Sanitizer</h1>
+            <p class="subtitle">Fast & Clean</p>
+        </div>
+
+        <div class="main">
+            <div class="payment-card" onclick="window.location.href='/pay/qr'">
+                <div class="payment-icon">📱</div>
+                <div class="payment-title">E-Wallet</div>
+                <p class="payment-desc">GCash • Maya • PayMaya</p>
+                <div class="payment-price">₱50</div>
+            </div>
+
+            <div class="payment-card" onclick="window.location.href='/solana_pay'">
+                <div class="payment-icon">🟣</div>
+                <div class="payment-title">Crypto</div>
+                <p class="payment-desc">Solana Pay</p>
+                <div class="payment-price">≈₱50</div>
+            </div>
+
+            <div class="payment-card" onclick="window.location.href='/pay/cash'">
+                <div class="payment-icon">💵</div>
+                <div class="payment-title">Cash</div>
+                <p class="payment-desc">Coins or Bills</p>
+                <div class="payment-price">₱50</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            🔒 Secure • ⚡ Instant • 🧼 99.9% Clean
+        </div>
+
+        <script>
+            function createParticles() {
+                const container = document.getElementById('particles');
+                for (let i = 0; i < 12; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+                    const size = Math.random() * 70 + 40;
+                    particle.style.width = size + 'px';
+                    particle.style.height = size + 'px';
+                    particle.style.left = Math.random() * 100 + '%';
+                    particle.style.top = Math.random() * 100 + '%';
+                    particle.style.animationDelay = Math.random() * 5 + 's';
+                    particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                    container.appendChild(particle);
+                }
+            }
+            createParticles();
+
+            function showStatus(message, type = 'waiting') {
+                const statusMsg = document.getElementById('statusMessage');
+                statusMsg.textContent = message;
+                statusMsg.className = 'status-message status-' + type;
+                statusMsg.style.display = 'inline-block';
+            }
+
+            function hideStatus() {
+                document.getElementById('statusMessage').style.display = 'none';
+            }
+
+            async function selectQRPayment() {
+                const qrDisplay = document.getElementById('qrDisplay');
+                
+                qrDisplay.innerHTML = `
+                    <div class="loader"></div>
+                    <div class="qr-instruction">Connecting to Maya Sandbox...</div>
+                    <div class="progress-steps">
+                        <div class="step active">1</div>
+                        <div class="step">2</div>
+                        <div class="step">3</div>
+                    </div>
+                `;
+
+                showStatus('🔗 Connecting to payment gateway...', 'waiting');
+
+                try {
+                    const response = await fetch('/create_payment', { method: 'POST' });
+                    const data = await response.json();
+
+                    if (!data.qr_image) {
+                        throw new Error('Failed to generate QR');
+                    }
+
+                    qrDisplay.innerHTML = `
+                        <div class="qr-code-container">
+                            <img src="data:image/png;base64,${data.qr_image}" alt="QR Code">
+                        </div>
+                        <div class="qr-instruction">📱 ${data.amount}</div>
+                        <div class="payment-provider">
+                            <span class="provider-badge">GCash</span>
+                            <span class="provider-badge">Maya</span>
+                            <span class="provider-badge">PayMaya</span>
+                        </div>
+                        <div class="progress-steps">
+                            <div class="step completed">1</div>
+                            <div class="step active">2</div>
+                            <div class="step">3</div>
+                        </div>
+                    `;
+                    
+                    showStatus('💳 Awaiting payment confirmation...', 'waiting');
+                    pollPaymentStatus(data.reference);
+                } catch (error) {
+                    console.error(error);
+                    qrDisplay.innerHTML = `
+                        <div style="font-size: 3.5em; color: #f44336;">⚠️</div>
+                        <h2 style="margin-top: 15px; font-size: 1.1em;">Connection Error</h2>
+                        <p style="margin-top: 8px; font-size: 0.82em; opacity: 0.8;">Please check internet connection</p>
+                    `;
+                    showStatus('❌ Unable to connect. Retrying...', 'error');
+                    setTimeout(() => location.reload(), 3000);
+                }
+            }
+
+            async function pollPaymentStatus(reference) {
+                const poll = setInterval(async () => {
+                    try {
+                        const res = await fetch(`/check_payment/${reference}`);
+                        const data = await res.json();
+
+                        if (data.status === 'PAID') {
+                            clearInterval(poll);
+                            processPayment();
+                        } else if (data.status === 'FAILED' || data.status === 'CANCELLED') {
+                            clearInterval(poll);
+                            showStatus('❌ Payment unsuccessful', 'error');
+                            setTimeout(() => location.reload(), 3000);
+                        }
+                    } catch (error) {
+                        console.error('Poll error:', error);
+                    }
+                }, 3000);
+
+                setTimeout(() => {
+                    clearInterval(poll);
+                    const statusMsg = document.getElementById('statusMessage');
+                    if (statusMsg.className !== 'status-message status-success') {
+                        showStatus('⏱️ Session timeout. Resetting...', 'error');
+                        setTimeout(() => location.reload(), 3000);
+                    }
+                }, 300000);
+            }
+
+            function processPayment() {
+                const qrDisplay = document.getElementById('qrDisplay');
+                
+                qrDisplay.innerHTML = `
+                    <div class="success-icon">✅</div>
+                    <h2 style="color: #00e676; font-size: 1.2em; font-weight: 700;">Payment Confirmed</h2>
+                    <p style="margin-top: 8px; font-size: 0.85em; opacity: 0.8;">Transaction successful</p>
+                    <div class="progress-steps" style="margin-top: 20px;">
+                        <div class="step completed">1</div>
+                        <div class="step completed">2</div>
+                        <div class="step active">3</div>
+                    </div>
+                `;
+
+                showStatus('✅ Payment verified. Initiating sanitization...', 'success');
+                setTimeout(() => startSanitization(), 1500);
+            }
+
+            function startSanitization() {
+                document.getElementById('sanitizingAnimation').classList.add('active');
+                hideStatus();
+                setTimeout(() => completeSanitization(), 10000);
+            }
+
+            function completeSanitization() {
+                const sanitizingAnimation = document.getElementById('sanitizingAnimation');
+                
+                sanitizingAnimation.innerHTML = `
+                    <div class="sanitizing-icon" style="animation: none; font-size: 8em;">✨</div>
+                    <div class="sanitizing-text" style="color: #00e676;">Sanitization Complete</div>
+                    <p style="margin-top: 20px; font-size: 1.2em; font-weight: 600;">Your helmet is clean & safe</p>
+                    <p style="margin-top: 15px; font-size: 0.95em; opacity: 0.8;">99.9% bacteria eliminated</p>
+                    <p style="margin-top: 25px; font-size: 1.1em;">Have a safe ride! 🏍️</p>
+                `;
+
+                // Redirect to rating page if session_id exists
+                setTimeout(() => {
+                    const statusMsg = document.getElementById('statusMessage');
+                    if (statusMsg && statusMsg.dataset.sessionId) {
+                        window.location.href = `/rating/${statusMsg.dataset.sessionId}`;
+                    } else {
+                        location.reload();
+                    }
+                }, 3000);
+            }
+
+            function showHelp() {
+                const helpMsg = 
+                    '═══════════════════════\n' +
+                    '   HELMET SANITIZER PRO\n' +
+                    '═══════════════════════\n\n' +
+                    'HOW TO USE:\n' +
+                    '1. Select payment method\n' +
+                    '2. Complete payment (₱50)\n' +
+                    '3. Wait for sanitization (10s)\n' +
+                    '4. Collect your helmet\n\n' +
+                    'PAYMENT OPTIONS:\n' +
+                    '• E-Wallet: GCash, Maya, PayMaya\n' +
+                    '• Cash: Coins or bills (exact)\n\n' +
+                    'FEATURES:\n' +
+                    '• UV-C Sterilization\n' +
+                    '• 99.9% Bacteria Elimination\n' +
+                    '• Safe & Chemical-free\n\n' +
+                    'Powered by Maya Sandbox\n' +
+                    'Need help? Contact staff';
+                
+                alert(helpMsg);
+            }
+
+            let inactivityTimer;
+            function resetInactivityTimer() {
+                clearTimeout(inactivityTimer);
+                inactivityTimer = setTimeout(() => location.reload(), 120000);
+            }
+
+            document.addEventListener('click', resetInactivityTimer);
+            document.addEventListener('touchstart', resetInactivityTimer);
+            resetInactivityTimer();
+        </script>
+    </body>
+    </html>

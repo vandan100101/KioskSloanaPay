@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Rate Us</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .rating-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            max-width: 450px;
+            width: 100%;
+            animation: slideUp 0.4s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        h1 {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 0.95em;
+            margin-bottom: 30px;
+        }
+
+        .stars {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .star {
+            font-size: 3em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            opacity: 0.3;
+        }
+
+        .star:active {
+            transform: scale(1.2);
+        }
+
+        .star.selected {
+            opacity: 1;
+            animation: pop 0.3s ease-out;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .feedback {
+            display: none;
+            margin: 25px 0;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .feedback.show {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            font-family: inherit;
+            font-size: 0.95em;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            border-color: #4CAF50;
+        }
+
+        textarea::placeholder {
+            color: #999;
+        }
+
+        .submit-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.2s;
+        }
+
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .skip-btn {
+            background: #f5f5f5;
+            color: #666;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: all 0.2s;
+        }
+
+        .skip-btn:active {
+            transform: scale(0.98);
+        }
+
+        .thank-you {
+            display: none;
+        }
+
+        .thank-you.show {
+            display: block;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .thank-icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+        }
+
+        .countdown {
+            margin-top: 20px;
+            color: #999;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="rating-container">
+        <div id="ratingForm">
+            <div class="icon">✨</div>
+            <h1>How was it?</h1>
+            <p class="subtitle">Rate your experience</p>
+
+            <div class="stars" id="stars">
+                <span class="star" data-rating="1" onclick="selectRating(1)">⭐</span>
+                <span class="star" data-rating="2" onclick="selectRating(2)">⭐</span>
+                <span class="star" data-rating="3" onclick="selectRating(3)">⭐</span>
+                <span class="star" data-rating="4" onclick="selectRating(4)">⭐</span>
+                <span class="star" data-rating="5" onclick="selectRating(5)">⭐</span>
+            </div>
+
+            <div class="feedback" id="feedback">
+                <textarea 
+                    id="feedbackText" 
+                    rows="3" 
+                    placeholder="Tell us more (optional)"
+                    maxlength="500"
+                ></textarea>
+            </div>
+
+            <button class="submit-btn" id="submitBtn" onclick="submitRating()" disabled>
+                Submit Rating
+            </button>
+            
+            <button class="skip-btn" onclick="skip()">
+                Skip
+            </button>
+        </div>
+
+        <div class="thank-you" id="thankYou">
+            <div class="thank-icon">🎉</div>
+            <h1>Thank You!</h1>
+            <p class="subtitle">Your feedback helps us improve</p>
+            <p class="countdown">Returning home in <span id="countdown">5</span>s</p>
+        </div>
+    </div>
+
+    <script>
+        const sessionId = "{{ session_id }}";
+        let selectedRating = 0;
+
+        function selectRating(rating) {
+            selectedRating = rating;
+            
+            const stars = document.querySelectorAll('.star');
+            stars.forEach((star, i) => {
+                if (i < rating) {
+                    star.classList.add('selected');
+                } else {
+                    star.classList.remove('selected');
+                }
+            });
+
+            document.getElementById('feedback').classList.add('show');
+            document.getElementById('submitBtn').disabled = false;
+        }
+
+        async function submitRating() {
+            if (!selectedRating) return;
+
+            const feedback = document.getElementById('feedbackText').value;
+            const btn = document.getElementById('submitBtn');
+            
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+
+            try {
+                const res = await fetch('/submit_rating', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        rating: selectedRating,
+                        feedback: feedback
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showThankYou();
+                } else {
+                    alert('Failed to submit. Please try again.');
+                    btn.disabled = false;
+                    btn.textContent = 'Submit Rating';
+                }
+            } catch (e) {
+                alert('Error submitting rating');
+                btn.disabled = false;
+                btn.textContent = 'Submit Rating';
+            }
+        }
+
+        function showThankYou() {
+            document.getElementById('ratingForm').style.display = 'none';
+            document.getElementById('thankYou').classList.add('show');
+            
+            let seconds = 5;
+            const el = document.getElementById('countdown');
+            
+            const interval = setInterval(() => {
+                seconds--;
+                el.textContent = seconds;
+                
+                if (seconds <= 0) {
+                    clearInterval(interval);
+                    window.location.href = '/';
+                }
+            }, 1000);
+        }
+
+        function skip() {
+            window.location.href = '/';
+        }
+
+        // Auto-skip after 30 seconds
+        let timer = setTimeout(() => skip(), 30000);
+
+        document.addEventListener('click', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => skip(), 30000);
+        });
+    </script>
+</body>
+</html>

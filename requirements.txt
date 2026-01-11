@@ -1,0 +1,5 @@
+Flask==3.0.0
+requests==2.31.0
+qrcode[pil]==7.4.2
+RPi.GPIO==0.7.1
+python-dotenv==1.0.0
