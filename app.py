@@ -16,14 +16,15 @@ from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import urlencode
 
-# --- Raspberry Pi GPIO Setup ---
+# NEW (Replace with this):
 try:
-    import RPi.GPIO as GPIO
+    import gpiod
+    from gpiod.line import Direction, Value
     RPI_AVAILABLE = True
-    print("✅ GPIO Module Loaded - Running on Raspberry Pi")
-except (ImportError, RuntimeError):
+    print("✅ gpiod Module Loaded - Running on Raspberry Pi 5")
+except ImportError:
     RPI_AVAILABLE = False
-    print("⚠️ GPIO Not Available - Running in Simulation Mode")
+    print("⚠️ gpiod Not Available - Running in Simulation Mode")
 
 # --- Flask App Configuration ---
 app = Flask(__name__)
@@ -50,10 +51,62 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 PAYMENT_AMOUNT = 1.00  # PHP (changed from 3.00 to match your webhook)
 
 # GPIO Configuration
-SANITIZER_PIN = 18
+# NEW:
+# GPIO Pin Assignments
+GPIO_PINS = {
+    "uv": 18,        # GPIO18 - UV Light
+    "brush": 23,     # GPIO23 - Brush Motor
+    "scent1": 24,    # GPIO24 - Scent 1
+    "scent2": 25,    # GPIO25 - Scent 2
+    "scent3": 8,     # GPIO8  - Scent 3
+    "pump": 7,       # GPIO7  - Soap Pump
+    "pump2": 12,     # GPIO12 - Rinse Pump
+    "blower": 16     # GPIO16 - Blower
+}
+
+gpio_chip = None
+relay_lines = {}
+
 if RPI_AVAILABLE:
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(SANITIZER_PIN, GPIO.OUT, initial=GPIO.LOW)
+    try:
+        # Open GPIO chip (Raspberry Pi 5 uses gpiochip4)
+        gpio_chip = gpiod.Chip('gpiochip4')
+        
+        # Setup all relay pins
+        for relay_name, pin in GPIO_PINS.items():
+            line = gpio_chip.get_line(pin)
+            line.request(consumer=f"helmet_{relay_name}", type=gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+            relay_lines[relay_name] = line
+            print(f"✅ GPIO Pin {pin} configured for {relay_name}")
+        
+        print(f"✅ All {len(relay_lines)} relay pins configured successfully")
+    except Exception as e:
+        print(f"⚠️ GPIO Setup Error: {e}")
+        print("⚠️ Falling back to simulation mode")
+        RPI_AVAILABLE = False
+        gpio_chip = None
+        relay_lines = {}
+        
+def set_relay(relay_name, state):
+    """Turn relay ON (1) or OFF (0)."""
+    if not RPI_AVAILABLE or relay_name not in relay_lines:
+        status = "ON" if state else "OFF"
+        print(f"💡 [SIMULATION] {relay_name.upper()}: {status}")
+        return
+    
+    try:
+        relay_lines[relay_name].set_value(state)
+        status = "ON" if state else "OFF"
+        print(f"⚡ {relay_name.upper()}: {status}")
+    except Exception as e:
+        print(f"❌ Error controlling {relay_name}: {e}")
+
+
+def all_relays_off():
+    """Turn all relays OFF."""
+    for relay_name in GPIO_PINS.keys():
+        set_relay(relay_name, 0)
+    print("🔌 All relays OFF")
 
 # In-memory payment tracking
 payments = {}
@@ -281,20 +334,79 @@ init_db()
 # ========================================
 # HELPER FUNCTIONS
 # ========================================
-
 def trigger_sanitizer():
-    """Activate sanitizer relay."""
-    if not RPI_AVAILABLE:
-        print("💡 [SIMULATION] Sanitizer running for 10 seconds...")
-        time.sleep(10)
-        print("✅ [SIMULATION] Sanitizer complete")
-        return
+    """
+    Complete helmet sanitization cycle - 30 seconds.
     
-    print(f"✅ Sanitizer ON (GPIO Pin {SANITIZER_PIN})")
-    GPIO.output(SANITIZER_PIN, GPIO.HIGH)
-    time.sleep(10)
-    GPIO.output(SANITIZER_PIN, GPIO.LOW)
-    print("🧼 Sanitizer OFF")
+    Timeline:
+    0-10s:   UV sterilization
+    10-20s:  UV + Brush + Soap (at 15s)
+    20-25s:  Rinse
+    25-30s:  Blower + Random scent
+    """
+    import random
+    
+    print("\n" + "="*50)
+    print("🧼 STARTING SANITIZATION CYCLE (30 seconds)")
+    print("="*50)
+    
+    try:
+        # Ensure all relays start OFF
+        all_relays_off()
+        time.sleep(0.5)
+        
+        # PHASE 1: UV Sterilization (0-10 seconds)
+        print("\n📍 PHASE 1: UV Sterilization (0-10s)")
+        set_relay("uv", 1)
+        time.sleep(10)
+        
+        # PHASE 2: Brush Cleaning (10-20 seconds)
+        print("\n📍 PHASE 2: Brush Cleaning (10-20s)")
+        set_relay("brush", 1)  # UV still ON
+        
+        # Wait 5 seconds, then add soap
+        time.sleep(5)
+        print("   🧴 Adding soap...")
+        set_relay("pump", 1)  # Soap pump ON
+        time.sleep(5)         # Soap runs for 5 seconds
+        set_relay("pump", 0)  # Soap pump OFF
+        
+        # Turn off UV and Brush
+        set_relay("uv", 0)
+        set_relay("brush", 0)
+        
+        # PHASE 3: Rinse (20-25 seconds)
+        print("\n📍 PHASE 3: Rinse (20-25s)")
+        set_relay("pump2", 1)  # Rinse pump ON
+        time.sleep(5)
+        set_relay("pump2", 0)  # Rinse pump OFF
+        
+        # PHASE 4: Dry & Scent (25-30 seconds)
+        print("\n📍 PHASE 4: Dry & Scent (25-30s)")
+        set_relay("blower", 1)
+        
+        # Random scent selection
+        scent = random.choice(["scent1", "scent2", "scent3"])
+        print(f"   🌸 Activating {scent}...")
+        set_relay(scent, 1)
+        
+        time.sleep(5)
+        
+        # Turn everything OFF
+        set_relay("blower", 0)
+        set_relay(scent, 0)
+        
+        print("\n✅ SANITIZATION COMPLETE!")
+        print("="*50 + "\n")
+        
+    except Exception as e:
+        print(f"\n❌ Error during sanitization: {e}")
+        print("🛑 Emergency shutdown - turning all relays OFF")
+        all_relays_off()
+    
+    finally:
+        # Safety: ensure all relays are OFF
+        all_relays_off()
 
 
 def login_required(f):
@@ -1390,10 +1502,18 @@ if __name__ == "__main__":
     print(f"   Mark Paid: POST http://localhost:5000/mark_paid/<reference>")
     print("="*60 + "\n")
     
+    # NEW (Replace with this):
     try:
         app.run(debug=True, host="0.0.0.0", port=5000)
+    except KeyboardInterrupt:
+        print("\n⚠️ Shutting down...")
     finally:
-        if RPI_AVAILABLE:
+        if RPI_AVAILABLE and relay_lines:
             print("\n🧹 Cleaning up GPIO...")
-            GPIO.cleanup()
-            print("✅ GPIO Cleaned")
+            try:
+                all_relays_off()
+                for line in relay_lines.values():
+                    line.release()
+                print("✅ GPIO Cleaned")
+            except Exception as e:
+                print(f"⚠️ GPIO cleanup error: {e}")
